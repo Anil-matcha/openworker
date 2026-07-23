@@ -788,6 +788,13 @@ DESCRIPTORS: list[ProviderDescriptor] = [
         env_key="NVIDIA_API_KEY",
         endpoint_help="Prefilled with NVIDIA's hosted NIM endpoint. Point it at a self-hosted NIM container (e.g. http://localhost:8000/v1) to use your own deployment.",
     ),
+    _compat(
+        "groq",
+        "Groq",
+        base_url="https://api.groq.com/openai/v1",
+        recommended_model="llama-4-maverick-17b-128e-instruct",
+        env_key="GROQ_API_KEY",
+    ),
     ProviderDescriptor(
         name="ollama",
         title="Ollama",

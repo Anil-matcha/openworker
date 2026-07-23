@@ -510,6 +510,7 @@ def test_matrix_answers_capabilities_for_reseller_ids():
         # NIM ids are `vendor/model`, so NVIDIA's own models repeat the word in the
         # routed id. Deliberate: the `z-ai/` and `deepseek-ai/` rows in matrix.py don't.
         "nvidia:nvidia/nemotron-3-super-120b-a12b",
+        "groq:llama-4-maverick-17b-128e-instruct",
     ):
         caps = capabilities_for(mid)
         assert caps.tools and caps.parallel_tool_calls and caps.streaming
@@ -578,7 +579,7 @@ def test_reseller_descriptors_and_matrix_stay_in_lockstep():
 
     for name in (
         "together", "fireworks", "openrouter", "nebius", "requesty", "orcarouter", "sambanova",
-        "novita",
+        "novita", "groq",
     ):
         d = get_descriptor(name)
         assert d is not None and d.needs_key
