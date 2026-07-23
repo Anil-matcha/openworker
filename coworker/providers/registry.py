@@ -247,7 +247,7 @@ def _build_openrouter_account(profile: dict[str, Any], secrets: Any) -> Provider
 
 def _openai_compat(vendor: str, default_base_url: str, env_key: Optional[str] = None):
     """Builder factory for vendors reached through their OpenAI-compatible API (Z AI, DeepSeek,
-    Kimi, MiniMax, Qwen, xAI, Mistral, Novita). The key is resolved from the vendor's OWN
+    Kimi, MiniMax, Qwen, xAI, Mistral, Novita, Upstage). The key is resolved from the vendor's OWN
     profile (or its env var) — deliberately NOT from the OpenAI env/SecretStore fallback, so a
     configured OpenAI key is never silently sent to a different vendor's endpoint. Missing key ⇒
     fail fast with a vendor-named error (these are only built on demand, when one of their models
@@ -716,6 +716,13 @@ DESCRIPTORS: list[ProviderDescriptor] = [
         recommended_model="zai-org/glm-5.2",
         env_key="NOVITA_API_KEY",
         endpoint_help="Prefilled with Novita's OpenAI-compatible endpoint; keep it unless you use a regional or proxy variant.",
+    ),
+    _compat(
+        "upstage",
+        "Upstage (Solar)",
+        base_url="https://api.upstage.ai/v1",
+        recommended_model="solar-pro3",
+        env_key="UPSTAGE_API_KEY",
     ),
     # Resellers: many labs' models behind one key, using THEIR model namespaces (the curated
     # ids + display labels live in providers/matrix.py). Groq was deferred on 2026-07-04 to

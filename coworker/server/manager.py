@@ -4279,6 +4279,7 @@ class SessionManager:
             "nvidia/nemotron-3-ultra-550b-a55b",
         ],
         "atlascloud": ["zai-org/glm-5.2"],
+        "upstage": ["solar-pro3", "solar-pro2", "solar-mini"],
     }
 
     def _suggested_models(self, name: str) -> list[str]:
