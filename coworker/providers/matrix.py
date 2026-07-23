@@ -442,6 +442,14 @@ MATRIX: dict[str, ModelEntry] = {
     "nebius:deepseek-ai/DeepSeek-V4-Pro": ModelEntry(
         "DeepSeek V4 Pro · via Nebius", _AGENTIC, 1_048_576
     ),
+    # -- Groq (LPU inference) ---------------------------------------------------
+    "groq:llama-4-maverick-17b-128e-instruct": ModelEntry(
+        "Llama 4 Maverick · via Groq"
+    ),
+    "groq:deepseek-r1-distill-llama-70b": ModelEntry(
+        "DeepSeek R1 Distill 70B · via Groq"
+    ),
+    "groq:qwen-qwq-32b": ModelEntry("Qwen QwQ 32B · via Groq"),
 }
 
 
