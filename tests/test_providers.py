@@ -291,6 +291,7 @@ COMPAT_VENDORS = {
     "mistral": "https://api.mistral.ai/v1",
     "nvidia": "https://integrate.api.nvidia.com/v1",
     "atlascloud": "https://api.atlascloud.ai/v1",
+    "upstage": "https://api.upstage.ai/v1",
 }
 
 
@@ -472,6 +473,7 @@ def test_compat_models_route_and_get_tool_capabilities():
         "mistral:mistral-large-latest",
         "orcarouter:anthropic/claude-sonnet-5",
         "atlascloud:zai-org/glm-5.2",
+        "upstage:solar-pro3",
     ):
         prefix = model.split(":", 1)[0]
         assert router._provider_name(model) == prefix

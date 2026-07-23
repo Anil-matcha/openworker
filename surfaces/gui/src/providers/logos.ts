@@ -35,6 +35,7 @@ import xai from "./logos/xai.svg";
 import meta from "./logos/meta.svg";
 import nebius from "./logos/nebius.svg";
 import trustedrouter from "./logos/trustedrouter.svg";
+import upstage from "./logos/upstage.svg";
 
 export const PROVIDER_LOGOS: Record<string, string> = {
   anthropic,
@@ -71,6 +72,7 @@ export const PROVIDER_LOGOS: Record<string, string> = {
   minimax,
   xai,
   trustedrouter,
+  upstage,
 };
 
 export const PROVIDER_ORDER = [
@@ -105,6 +107,7 @@ export const PROVIDER_ORDER = [
   "novita",
   "groq",
   "trustedrouter",
+  "upstage",
 ];
 
 export function providerRank(name: string): number {

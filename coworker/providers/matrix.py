@@ -215,6 +215,8 @@ MATRIX: dict[str, ModelEntry] = {
     "mistral:mistral-large-latest": ModelEntry(
         "Mistral Large · Mistral", _AGENTIC, 128_000
     ),
+    "upstage:solar-open2": ModelEntry("Solar Open 2 · Upstage"),
+    "upstage:solar-pro3": ModelEntry("Solar Pro 3 · Upstage"),
     # -- SambaNova ---------------------------------------------------------------
     # SambaCloud's OpenAI-compatible API; ids and windows are the `context_length` values
     # api.sambanova.ai/v1/models reports (keyless, read 2026-10-25). The two 128k rows are
