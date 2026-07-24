@@ -1,8 +1,9 @@
 """Web search providers — a keyless default + pluggable third-party services.
 
 `duckduckgo` works with no API key (our "starting version of our own"). `tavily`, `brave`,
-`serper` and `exa` give better results but need a key (configured via the SecretStore / env).
-All providers return a uniform `list[SearchResult]`; the heavy client libs are lazy-imported.
+`serper`, `exa` and `firecrawl` give better results but need a key (configured via the
+SecretStore / env). All providers return a uniform `list[SearchResult]`; the heavy client libs
+are lazy-imported.
 """
 
 from __future__ import annotations
@@ -195,12 +196,42 @@ class ExaProvider(WebSearchProvider):
         ]
 
 
+class FirecrawlProvider(WebSearchProvider):
+    """Firecrawl web search (https://docs.firecrawl.dev) via the v2 REST API."""
+
+    name = "firecrawl"
+    requires_key = True
+
+    def __init__(self, api_key: str) -> None:
+        self.api_key = api_key
+
+    def search(self, query: str, max_results: int = 5) -> list[SearchResult]:
+        import httpx
+
+        resp = httpx.post(
+            "https://api.firecrawl.dev/v2/search",
+            headers={"Authorization": f"Bearer {self.api_key}"},
+            json={"query": query, "limit": max_results},
+            timeout=_TIMEOUT,
+        )
+        data = resp.json()
+        return [
+            SearchResult(
+                title=r.get("title", ""),
+                url=r.get("url", ""),
+                snippet=r.get("description", ""),
+            )
+            for r in (data.get("data", {}) or {}).get("web", [])
+        ]
+
+
 _PROVIDERS = {
     "duckduckgo": DuckDuckGoProvider,
     "tavily": TavilyProvider,
     "brave": BraveProvider,
     "serper": SerperProvider,
     "exa": ExaProvider,
+    "firecrawl": FirecrawlProvider,
 }
 
 
