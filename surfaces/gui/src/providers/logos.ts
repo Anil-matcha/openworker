@@ -6,6 +6,7 @@
 // first, long tail behind the scroll fold.
 
 import anthropic from "./logos/anthropic.svg";
+import anyrouter from "./logos/anyrouter.svg";
 import openai from "./logos/openai.svg";
 import gemini from "./logos/gemini.svg";
 import byteplus from "./logos/byteplus.svg";
@@ -39,6 +40,7 @@ import upstage from "./logos/upstage.svg";
 
 export const PROVIDER_LOGOS: Record<string, string> = {
   anthropic,
+  anyrouter,
   openai,
   // The subscription provider wears the same vendor mark — it's the same models,
   // different billing (owner call 2026-08-21: no bare-letter monogram).
@@ -91,6 +93,7 @@ export const PROVIDER_ORDER = [
   "openrouter-account",
   "fireworks",
   "together",
+  "anyrouter",
   "zai",
   "kimi",
   "deepseek",

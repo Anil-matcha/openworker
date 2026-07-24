@@ -2699,6 +2699,7 @@ export function detectProvider(apiKey: string): string | null {
   if (key.startsWith("sk-ant-")) return "anthropic";
   if (key.startsWith("sk-orca-")) return "orcarouter";
   if (key.startsWith("sk-or-")) return "openrouter";
+  if (key.startsWith("sk-ar-")) return "anyrouter";
   if (key.startsWith("AIza")) return "gemini";
   if (key.startsWith("nvapi-")) return "nvidia";
   if (key.startsWith("sk-tr-")) return "trustedrouter";
