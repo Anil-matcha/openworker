@@ -162,7 +162,9 @@ export function useProviderSetup(opts?: { onSaved?: () => void }): ProviderSetup
     setFields(next);
     setDirty(!!draft && Object.values(draft).some(Boolean));
     setVerify({ state: "idle" });
-    setShowEndpoint(false);
+    // A custom provider cannot work without its endpoint, so keep that field
+    // visible instead of hiding it behind the built-ins' expert disclosure.
+    setShowEndpoint(!!p?.fields.find((f) => f.key === "base_url")?.required);
   };
 
   const backToGallery = () => {
@@ -180,14 +182,16 @@ export function useProviderSetup(opts?: { onSaved?: () => void }): ProviderSetup
   const runTestAndSave = async (): Promise<boolean> => {
     if (!sel) return false;
     setVerify({ state: "testing" });
-    const res = await verifyProvider(sel, fields).catch(() => ({ ok: false, error: t("provider.err_unreachable") }));
+    const res: { ok: boolean; error?: string; warning?: string } = await verifyProvider(sel, fields).catch(
+      () => ({ ok: false, error: t("provider.err_unreachable") }),
+    );
     if (!res.ok) {
       setVerify({ state: "error", msg: res.error || t("provider.err_couldnt_verify") });
       return false;
     }
     if (dirty || !info?.configured) await setProvider(sel, fields).catch(() => {});
     if (!info?.needs_key) setKeylessOk((s) => new Set(s).add(sel));
-    setVerify({ state: "ok" });
+    setVerify({ state: "ok", msg: res.warning });
     setDirty(false);
     setDrafts((d) => ({ ...d, [sel]: {} }));
     await refreshProviders();
@@ -196,11 +200,15 @@ export function useProviderSetup(opts?: { onSaved?: () => void }): ProviderSetup
     // the timeout would fire its stale closure (dirty/fields from before the save) and
     // re-stash the just-saved key as a draft — the state-restore bug (owner catch
     // 2026-07-19). This return path clears the draft unconditionally.
-    backTimer.current = window.setTimeout(() => {
-      setDrafts((d) => ({ ...d, [sel]: {} }));
-      setSel(null);
-      setVerify({ state: "idle" });
-    }, 900);
+    // A catalog-less gateway is still usable, but its warning contains the next action;
+    // leave the form open instead of making it disappear after the usual success animation.
+    if (!res.warning) {
+      backTimer.current = window.setTimeout(() => {
+        setDrafts((d) => ({ ...d, [sel]: {} }));
+        setSel(null);
+        setVerify({ state: "idle" });
+      }, 900);
+    }
     return true;
   };
 
@@ -413,11 +421,13 @@ export function ProviderCards({
   tp,
   gridClass = "grid grid-cols-2 gap-2.5",
   lastUsed = false,
+  onAddCustom,
 }: {
   ps: ProviderSetupState;
   tp: string; // testid prefix ("ob" onboarding, "set" settings)
   gridClass?: string;
   lastUsed?: boolean;
+  onAddCustom?: () => void;
 }) {
   const card =
     "flex items-center gap-2.5 rounded-xl border border-line bg-panel px-3 py-2.5 text-left hover:border-lineStrong transition-colors";
@@ -438,6 +448,19 @@ export function ProviderCards({
           <span className="text-faint text-body">›</span>
         </button>
       ))}
+      {onAddCustom && (
+        <button
+          className={card + " border-dashed text-muted hover:text-ink"}
+          data-testid={`${tp}-provider-custom-add`}
+          onClick={onAddCustom}
+        >
+          <span className="rounded-lg border border-line grid place-items-center shrink-0 text-[20px]" style={{ width: 32, height: 32 }}>
+            +
+          </span>
+          <span className="min-w-0 flex-1 text-[13px] font-semibold">Custom provider</span>
+          <span className="text-faint text-[14px]">›</span>
+        </button>
+      )}
     </div>
   );
 }
@@ -700,6 +723,7 @@ export function ProviderForm({
       {/* Error line: fixed height so failures never reflow the form. */}
       <div className="mt-3 min-h-[19px] text-ui">
         {ps.verify.state === "error" && <span className="text-warnInk">{ps.verify.msg}</span>}
+        {ps.verify.state === "ok" && ps.verify.msg && <span className="text-muted">{ps.verify.msg}</span>}
       </div>
       {info?.auth === "oauth" ? null : footer}
     </div>

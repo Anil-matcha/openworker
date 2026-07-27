@@ -6,6 +6,7 @@ import {
   connectConnector,
   connectManaged,
   connectMcpBacked,
+  createCustomProvider,
   disallowUser,
   getSettings,
   getSubscriptions,
@@ -47,6 +48,7 @@ const relTime = (epoch?: number | null): string | null => {
 // when Settings/Activity became full-page surfaces): ModelsTab → Settings ▸ Models; ConnectorsTab →
 // Integrations ▸ Connectors (the MCP tab retired into the Connectors page, UX-034).
 const SEC_H = "text-label text-faint font-medium";
+const CARD = "rounded-xl2 border border-line bg-panel";
 const BTN_BORDERED =
   "text-ui px-3 py-1.5 rounded-lg border border-line bg-paper hover:border-lineStrong shrink-0";
 const BTN_ACCENT = "text-ui px-3 py-1.5 rounded-lg bg-accent text-white shrink-0 disabled:opacity-50";
@@ -78,10 +80,11 @@ export function ProviderKeyFooter({
       className="text-ui text-danger/80 hover:text-danger hover:underline underline-offset-2"
       data-testid="set-remove-key"
       onClick={() => {
-        if (window.confirm(t("manage.remove_key_confirm", { title: info?.title || "" }))) onRemove();
+        const key = info?.is_custom ? "manage.remove_provider_confirm" : "manage.remove_key_confirm";
+        if (window.confirm(t(key, { title: info?.title || "" }))) onRemove();
       }}
     >
-      {t("manage.remove_key")}
+      {t(info?.is_custom ? "manage.remove_provider" : "manage.remove_key")}
     </button>
   );
 }
@@ -97,6 +100,8 @@ export function ModelsTab() {
   // The Pick a model dialog (UX-055): "" closed, "+" picking, else the model to configure.
   const [dialog, setDialog] = useState<string>("");
   const [settingsError, setSettingsError] = useState(false);
+  const [addingCustom, setAddingCustom] = useState(false);
+  const [openCustom, setOpenCustom] = useState<string | null>(null);
   const refreshSettings = () => {
     setSettingsError(false);
     getSettings()
@@ -117,6 +122,13 @@ export function ModelsTab() {
       }
     } catch { /* private window */ }
   }, []);
+
+  useEffect(() => {
+    if (openCustom && ps.providers.some((p) => p.name === openCustom)) {
+      setOpenCustom(null);
+      ps.openProvider(openCustom);
+    }
+  }, [openCustom, ps.providers]);
 
   // #43: a failed or hung settings fetch says so and offers Retry (same shape as the
   // local-models status line below) instead of sitting on "Loading…" forever.
@@ -152,7 +164,19 @@ export function ModelsTab() {
   if (ps.sel === null) {
     return (
       <div>
-        <ProviderGroups ps={ps} tp="set" models={settings.models} />
+        {addingCustom ? (
+          <CustomProviderForm
+            onCancel={() => setAddingCustom(false)}
+            onCreated={async (name) => {
+              setAddingCustom(false);
+              setOpenCustom(name);
+              await ps.refreshProviders();
+              refreshSettings();
+            }}
+          />
+        ) : (
+          <ProviderGroups ps={ps} tp="set" models={settings.models} onAddCustom={() => setAddingCustom(true)} />
+        )}
         <ComposerPickerCard settings={settings} providers={ps.providers} onChanged={refreshSettings} onPick={() => setDialog("+")} onConfigure={(m) => setDialog(m)} />
         {dialogEl}
       </div>
@@ -233,6 +257,63 @@ export function ModelsTab() {
           </div>
         )
       )}
+    </div>
+  );
+}
+
+/** First-run form for a generic OpenAI-compatible provider. It intentionally does
+ * not fetch a model catalog: users add the exact model ids their gateway exposes. */
+function CustomProviderForm({
+  onCancel,
+  onCreated,
+}: {
+  onCancel: () => void;
+  onCreated: (name: string) => Promise<void>;
+}) {
+  const [title, setTitle] = useState("");
+  const [name, setName] = useState("");
+  const [baseUrl, setBaseUrl] = useState("");
+  const [apiKey, setApiKey] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const input = "w-full px-3 py-2 rounded-lg border border-line bg-panel text-[13.5px] outline-none focus:border-accent";
+
+  const save = async () => {
+    setSaving(true);
+    setError(null);
+    const result: { ok: boolean; error?: string; provider?: string } = await createCustomProvider(
+      name,
+      title,
+      { base_url: baseUrl, api_key: apiKey },
+    ).catch(() => ({ ok: false, error: "unreachable" }));
+    setSaving(false);
+    if (!result.ok || !result.provider) {
+      setError(result.error || "Couldn’t add provider.");
+      return;
+    }
+    await onCreated(result.provider);
+  };
+
+  return (
+    <div className={CARD + " p-4 max-w-xl"} data-testid="set-custom-provider-form">
+      <div className="text-[15px] font-semibold">Add OpenAI-compatible provider</div>
+      <p className="text-[12px] text-muted mt-1 leading-relaxed">
+        This provider uses Chat Completions with Bearer authentication. Use HTTPS unless the gateway is local; you’ll add its model IDs manually next.
+      </p>
+      <label className="block text-[12px] text-muted mt-3 mb-1" htmlFor="custom-provider-title">Provider name</label>
+      <input id="custom-provider-title" className={input} value={title} placeholder="OpenRouter" onChange={(e) => setTitle(e.target.value)} />
+      <label className="block text-[12px] text-muted mt-3 mb-1" htmlFor="custom-provider-route">Route prefix</label>
+      <input id="custom-provider-route" className={input} value={name} placeholder="openrouter" spellCheck={false} autoCapitalize="none" onChange={(e) => setName(e.target.value.toLowerCase())} />
+      <p className="text-[11.5px] text-faint mt-1">Models will be selected as <code>openrouter:model-id</code>.</p>
+      <label className="block text-[12px] text-muted mt-3 mb-1" htmlFor="custom-provider-endpoint">Endpoint</label>
+      <input id="custom-provider-endpoint" className={input} value={baseUrl} placeholder="https://…/v1" spellCheck={false} autoCapitalize="none" onChange={(e) => setBaseUrl(e.target.value)} />
+      <label className="block text-[12px] text-muted mt-3 mb-1" htmlFor="custom-provider-key">API key</label>
+      <input id="custom-provider-key" className={input} type="password" value={apiKey} placeholder="…" autoComplete="off" onChange={(e) => setApiKey(e.target.value)} />
+      {error && <div className="text-[12.5px] text-warnInk mt-3">{error}</div>}
+      <div className="flex gap-2 mt-4">
+        <button className={BTN_ACCENT} disabled={saving} onClick={() => void save()}>{saving ? "Adding…" : "Add provider"}</button>
+        <button className={BTN_BORDERED} onClick={onCancel}>Cancel</button>
+      </div>
     </div>
   );
 }

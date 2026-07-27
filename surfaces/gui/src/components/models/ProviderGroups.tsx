@@ -39,10 +39,12 @@ export function ProviderGroups({
   ps,
   tp,
   models,
+  onAddCustom,
 }: {
   ps: ProviderSetupState;
   tp: string;
   models: string[]; // the picker's models, for the count on each card
+  onAddCustom?: () => void; // Settings: the "Custom provider" card at the end of the API-keys group
 }) {
   const { t } = useTranslation();
   const [query, setQuery] = useState("");
@@ -110,6 +112,19 @@ export function ProviderGroups({
             {/* A long group (API keys) shows two rows, then a "Show N more" line expands it in place. */}
             <div className="grid grid-cols-2 xl:grid-cols-3 gap-3" data-testid={`provider-grid-${kind}`}>
               {(expanded.has(kind) || q ? cards : cards.slice(0, FOLD)).map(cardFor)}
+              {kind === "api_key" && onAddCustom && (expanded.has(kind) || q || cards.length <= FOLD) && (
+                <button
+                  className={card + " border-dashed bg-transparent text-muted hover:text-ink"}
+                  data-testid={`${tp}-provider-custom-add`}
+                  onClick={onAddCustom}
+                >
+                  <span className="rounded-lg border border-line grid place-items-center shrink-0 text-[20px]" style={{ width: 32, height: 32 }}>
+                    +
+                  </span>
+                  <span className="min-w-0 flex-1 text-ui font-semibold">{t("manage.custom_provider_card")}</span>
+                  <span className="text-faint text-body">›</span>
+                </button>
+              )}
             </div>
             {!q && cards.length > FOLD && (
               <button
