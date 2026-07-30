@@ -1,7 +1,7 @@
 """Tests for web search — provider abstraction, the tool, and config resolution.
 
 No network: a FakeProvider is injected; third-party key handling and the REST config path
-are exercised without hitting DuckDuckGo/Tavily/Brave/Serper.
+are exercised without hitting DuckDuckGo/Tavily/Brave/Serper/Exa.
 """
 
 from __future__ import annotations
@@ -20,6 +20,7 @@ from coworker.web.providers import (
     _PROVIDERS,
     BraveProvider,
     DuckDuckGoProvider,
+    ExaProvider,
     SerperProvider,
     TavilyProvider,
     WebSearchProvider,
@@ -87,6 +88,9 @@ def test_build_provider_third_party_requires_key():
     assert isinstance(build_provider("brave", "brv-x"), BraveProvider)
     assert isinstance(build_provider("serper", "srp-x"), SerperProvider)
     assert "serper" in provider_names()
+    with pytest.raises(ValueError):
+        build_provider("exa")  # no key
+    assert isinstance(build_provider("exa", "exa-x"), ExaProvider)
 
 
 def test_serper_sends_correct_request_and_maps_organic_results(monkeypatch):
@@ -128,6 +132,45 @@ def test_serper_sends_correct_request_and_maps_organic_results(monkeypatch):
     assert results[0].title == "Example Title"
     assert results[0].url == "https://example.com"
     assert results[0].snippet == "An example snippet."
+
+
+def test_exa_provider_parses_highlights(monkeypatch):
+    import httpx
+
+    captured = {}
+
+    def fake_post(url, headers=None, json=None, timeout=None):
+        captured.update(url=url, headers=headers, json=json)
+        return httpx.Response(
+            200,
+            json={
+                "results": [
+                    {
+                        "title": "Exa",
+                        "url": "https://exa.ai",
+                        "highlights": ["neural search", "for AI"],
+                    },
+                    {"title": None, "url": "https://exa.ai/docs"},
+                ]
+            },
+        )
+
+    monkeypatch.setattr(httpx, "post", fake_post)
+    results = ExaProvider("exa-x").search("what is exa", max_results=2)
+
+    assert captured["url"] == "https://api.exa.ai/search"
+    assert captured["headers"]["x-api-key"] == "exa-x"
+    assert captured["headers"]["x-exa-integration"] == "andrewyng/openworker-integration"
+    assert captured["json"]["numResults"] == 2
+    assert captured["json"]["contents"] == {"highlights": True}
+    assert [r.to_dict() for r in results] == [
+        {
+            "title": "Exa",
+            "url": "https://exa.ai",
+            "snippet": "neural search for AI",
+        },
+        {"title": "", "url": "https://exa.ai/docs", "snippet": ""},
+    ]
 
 
 def test_keyed_providers_raise_on_http_errors(monkeypatch):
