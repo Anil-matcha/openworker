@@ -288,6 +288,7 @@ COMPAT_VENDORS = {
     "qwen": "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
     "xai": "https://api.x.ai/v1",
     "mistral": "https://api.mistral.ai/v1",
+    "orcarouter": "https://api.orcarouter.ai/v1",
 }
 
 
@@ -467,6 +468,7 @@ def test_compat_models_route_and_get_tool_capabilities():
         "qwen:qwen3-max",
         "xai:grok-4.3",
         "mistral:mistral-large-latest",
+        "orcarouter:anthropic/claude-sonnet-5",
     ):
         prefix = model.split(":", 1)[0]
         assert router._provider_name(model) == prefix
@@ -501,6 +503,7 @@ def test_matrix_answers_capabilities_for_reseller_ids():
         "nebius:zai-org/GLM-5.2",
         "requesty:zai/glm-5.2",
         "requesty:anthropic/claude-sonnet-5",
+        "orcarouter:anthropic/claude-sonnet-5",
     ):
         caps = capabilities_for(mid)
         assert caps.tools and caps.parallel_tool_calls and caps.streaming
@@ -567,7 +570,7 @@ def test_reseller_descriptors_and_matrix_stay_in_lockstep():
     from coworker.providers.matrix import models_for_provider
     from coworker.providers.registry import get_descriptor
 
-    for name in ("together", "fireworks", "openrouter", "nebius", "requesty"):
+    for name in ("together", "fireworks", "openrouter", "nebius", "requesty", "orcarouter"):
         d = get_descriptor(name)
         assert d is not None and d.needs_key
         curated = models_for_provider(name)
