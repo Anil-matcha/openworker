@@ -982,7 +982,7 @@ export async function cloudLogout(): Promise<{ ok: boolean }> {
 export async function connectManaged(
   name: string,
   options?: { access?: "read" | "write"; flow?: "install" },
-): Promise<{ ok: boolean; error?: string }> {
+): Promise<{ ok: boolean; error?: string; signed_in?: boolean }> {
   const res = await fetch(
     `${httpBase()}/v1/connectors/${encodeURIComponent(name)}/connect-managed`,
     {
