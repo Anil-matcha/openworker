@@ -700,6 +700,13 @@ DESCRIPTORS: list[ProviderDescriptor] = [
         env_key="SAMBANOVA_API_KEY",
         endpoint_help="Prefilled with SambaNova's official OpenAI-compatible endpoint.",
     ),
+    _compat(
+        "atlascloud",
+        "Atlas Cloud",
+        base_url="https://api.atlascloud.ai/v1",
+        recommended_model="openai/gpt-4.1-mini",
+        env_key="ATLASCLOUD_API_KEY",
+    ),
     # Resellers: many labs' models behind one key, using THEIR model namespaces (the curated
     # ids + display labels live in providers/matrix.py). TODO: add Groq here (+ its matrix
     # rows) once the current provider surface is tested — deliberately deferred to bound
