@@ -46,7 +46,7 @@ opening a PR:
 | Changed area | Focused check | Full check |
 | --- | --- | --- |
 | Python backend | `.venv/bin/pytest tests/test_relevant_area.py -q` | `.venv/bin/pytest tests -q --cov=coworker --cov-report=term-missing` |
-| GUI logic | `cd surfaces/gui && npm test -- --run path/to/relevant.test.tsx` | `cd surfaces/gui && npx tsc --noEmit && npm test` |
+| GUI logic | `cd surfaces/gui && npm test -- path/to/relevant.test.tsx` | `cd surfaces/gui && npx tsc --noEmit && npm test` |
 | GUI workflow | `cd surfaces/gui && npx playwright test e2e/relevant.spec.ts` | `cd surfaces/gui && npx playwright install chromium && npm run e2e` |
 
 CI uses Python 3.12, Node 20, and the hermetic Playwright suite; it installs
