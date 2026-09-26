@@ -20,8 +20,10 @@ regression test. Keep unrelated cleanup on a separate branch.
 ## Prepare your fork
 
 Python 3.10 or newer and Node.js 20 are required by the project metadata and
-CI. For desktop development, install the platform prerequisites for Tauri 2;
-the browser UI and Python tests do not need a packaged desktop app.
+CI. Check `python3 --version` before running the bootstrap script: it currently
+uses that exact executable, and some macOS installations still provide Python
+3.9 as `python3`. For desktop development, install the platform prerequisites
+for Tauri 2; the browser UI and Python tests do not need a packaged desktop app.
 
 Fork the repository on GitHub, then run:
 
@@ -34,8 +36,10 @@ git switch -c fix/short-description upstream/main
 bash packaging/setup_dev_env.sh
 ```
 
-On Windows, run the setup script from Git Bash or WSL. The README shows how to
-start the server and browser UI; from `surfaces/gui/`, run `npm ci` before
+On Windows, use WSL for this bootstrap flow. Git Bash currently creates a
+`.venv/Scripts/` layout that the script does not handle (see
+[#9](https://github.com/andrewyng/openworker/issues/9)). The README shows how
+to start the server and browser UI; from `surfaces/gui/`, run `npm ci` before
 GUI tests or development.
 
 ## Validate the change
@@ -50,9 +54,10 @@ opening a PR:
 | GUI workflow | `cd surfaces/gui && npx playwright test e2e/relevant.spec.ts` | `cd surfaces/gui && npx playwright install chromium && npm run e2e` |
 
 CI uses Python 3.12, Node 20, and the hermetic Playwright suite; it installs
-`.[messaging,dev,bedrock]` for the Python job. Windows Python commands use
-`.venv\\Scripts\\pytest.exe`. If you cannot run a check locally, say so in the
-PR and include the checks you did run.
+`.[messaging,dev,bedrock]` for the Python job. In a manually created Windows
+virtual environment, run Python tests with `.venv/Scripts/python.exe -m pytest`.
+If you cannot run a check locally, say so in the PR and include the checks you
+did run.
 
 ## Open a pull request
 
