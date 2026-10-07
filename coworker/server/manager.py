@@ -4194,6 +4194,14 @@ class SessionManager:
                 # A keyless server is "connected" when it answers (cached probes), not
                 # when a form was saved; the page groups connected providers first.
                 row["alive"] = self._ollama_alive() if d.name == "ollama" else self._local_server_alive(d.name)
+            if d.name == "llamacpp":
+                # UX-057: OpenWorker can set it up and run it here (Mac for now).
+                from ..providers import llamacpp_setup
+
+                if llamacpp_setup.supported():
+                    st = self.llamacpp_runner().state()
+                    row["setup_here"] = True
+                    row["managed"] = {"phase": st["phase"], "model": (st["model"] or {}).get("name")}
             if d.auth == "oauth":
                 # Sign-in state instead of key state; the token values themselves
                 # never leave the SecretStore.
@@ -4624,6 +4632,39 @@ class SessionManager:
         from ..providers import local_machine
 
         return local_machine.system_facts()
+
+    def llamacpp_runner(self):
+        """The llama-server OpenWorker runs (UX-057), wired to point the `llamacpp`
+        provider at it and tick its model once it answers."""
+        from ..providers import llamacpp_setup
+
+        runner = llamacpp_setup.runner()
+        if runner.on_running is None:
+            runner.on_running = self._llamacpp_running
+        return runner
+
+    def llamacpp_stop(self) -> dict[str, Any]:
+        from ..providers import local_server
+
+        result = self.llamacpp_runner().stop()
+        # The cached probe would say "running" for up to 30 s after the server is gone.
+        local_server.forget_all()
+        self._local_alive_cache = {}
+        return result
+
+    def _llamacpp_running(self, base_url: str, alias: str) -> None:
+        from ..providers import local_server
+
+        local_server.forget_all()
+        self._local_alive_cache = {}
+        model = f"llamacpp:{alias}"
+        # Switching models: the one it served before is gone, so it leaves the picker.
+        previous = self._prefs.get("llamacpp_managed_model")
+        if previous and previous != model:
+            self.remove_model(previous)
+        self._prefs["llamacpp_managed_model"] = model
+        self.set_provider("llamacpp", {"base_url": base_url})
+        self.add_model(model)
 
     def model_selectable(self, model: str) -> bool:
         """Can this machine run `model` right now? Its provider has a key — or, for the
@@ -6085,6 +6126,9 @@ class SessionManager:
         await self.stop_gateway()
         await self.mcp.aclose()
         self.audit_store.close()
+        from ..providers import llamacpp_setup
+
+        llamacpp_setup.runner().shutdown()
 
     # -- automation (scheduled tasks) -------------------------------------------
     def worker_call_for(self, arguments: dict[str, Any], *, lead_session: str | None = None) -> dict[str, Any] | None:

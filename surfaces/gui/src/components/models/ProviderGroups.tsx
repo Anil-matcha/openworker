@@ -22,7 +22,7 @@ export function providerKind(p: ProviderInfo): Kind {
  * answers (the setup state's `keylessOk`). */
 export function providerConnected(p: ProviderInfo, keylessOk: Set<string>): boolean {
   if (p.auth === "oauth") return !!p.signed_in;
-  if (!p.needs_key) return !!p.alive || keylessOk.has(p.name);
+  if (!p.needs_key) return !!p.alive || keylessOk.has(p.name) || p.managed?.phase === "running";
   return p.configured;
 }
 
@@ -68,14 +68,18 @@ export function ProviderGroups({
         <ProviderMark name={p.name} title={p.title} />
         <span className="min-w-0 flex-1">
           <span className={"block text-ui font-semibold leading-tight truncate" + (connected ? "" : " text-muted")}>{p.title}</span>
-          {connected && count > 0 ? (
+          {p.managed?.phase === "running" && p.managed.model ? (
+            <span className="block text-meta text-ok font-medium truncate">{t("llamacpp.card_running", { model: p.managed.model })}</span>
+          ) : p.managed && !connected && ["installing", "downloading", "loading", "checking"].includes(p.managed.phase) ? (
+            <span className="block text-meta text-muted truncate">{t(p.managed.phase === "installing" ? "llamacpp.status_installing" : "llamacpp.status_starting")}</span>
+          ) : connected && count > 0 ? (
             <span className="block text-meta text-ok font-medium truncate">
               {t(p.needs_key || p.auth === "oauth" ? "provider.connected_count" : "provider.running_count", { count })}
             </span>
           ) : connected && !p.needs_key && p.auth !== "oauth" ? (
             <span className="block text-meta text-ok font-medium truncate">{t("provider.running")}</span>
           ) : !connected && !p.needs_key && p.auth !== "oauth" && p.kind === "local" && p.name !== "ollama" ? (
-            <span className="block text-meta text-faint truncate">{t("provider.not_connected")}</span>
+            <span className="block text-meta text-faint truncate">{t(p.setup_here ? "llamacpp.card_not_set_up" : "provider.not_connected")}</span>
           ) : (
             ps.statusFor(p, { lastUsed: true })
           )}

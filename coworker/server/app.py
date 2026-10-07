@@ -217,6 +217,17 @@ def create_app(manager: SessionManager) -> FastAPI:
             import traceback
 
             traceback.print_exc()
+        try:
+            # A llama-server left by an earlier run is stopped; "Start with OpenWorker"
+            # starts the last model again (providers/llamacpp_setup.py).
+            from ..providers import llamacpp_setup
+
+            if llamacpp_setup.supported():
+                await asyncio.to_thread(manager.llamacpp_runner().on_app_start)
+        except Exception:
+            import traceback
+
+            traceback.print_exc()
         yield
         openrouter_auth.cancel()
         await manager.aclose()  # stop gateway + close MCP connections on shutdown
@@ -2407,6 +2418,40 @@ def create_app(manager: SessionManager) -> FastAPI:
     @app.get("/v1/system")
     def system_get() -> dict[str, Any]:
         return manager.system_facts()
+
+    # UX-057: llama.cpp set up and run by OpenWorker. GET polls the state while it works.
+    @app.get("/v1/llamacpp/setup")
+    async def llamacpp_setup_get() -> dict[str, Any]:
+        from ..providers import llamacpp_setup
+
+        manager.llamacpp_runner()
+        return await asyncio.to_thread(llamacpp_setup.overview)
+
+    @app.post("/v1/llamacpp/install")
+    def llamacpp_install() -> dict[str, Any]:
+        return manager.llamacpp_runner().install()
+
+    @app.post("/v1/llamacpp/start")
+    def llamacpp_start(body: dict) -> dict[str, Any]:
+        return manager.llamacpp_runner().start((body or {}).get("choice") or {})
+
+    @app.post("/v1/llamacpp/stop")
+    async def llamacpp_stop() -> dict[str, Any]:
+        return await asyncio.to_thread(manager.llamacpp_stop)
+
+    @app.post("/v1/llamacpp/cancel")
+    def llamacpp_cancel() -> dict[str, Any]:
+        return manager.llamacpp_runner().cancel()
+
+    @app.post("/v1/llamacpp/autostart")
+    def llamacpp_autostart(body: dict) -> dict[str, Any]:
+        return manager.llamacpp_runner().set_autostart(bool((body or {}).get("on")))
+
+    @app.post("/v1/llamacpp/pick-file")
+    async def llamacpp_pick_file() -> dict[str, Any]:
+        from ..providers import llamacpp_setup
+
+        return await asyncio.to_thread(llamacpp_setup.pick_gguf_file)
 
     @app.post("/v1/providers/verify")
     async def providers_verify(body: dict) -> dict[str, Any]:

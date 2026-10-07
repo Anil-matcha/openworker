@@ -24,6 +24,7 @@ import {
 import { CloudSignInInline, CloudStatusPending } from "./connectors/CloudSignIn";
 import { Icon } from "./Icon";
 import { ModelChecklist } from "./ModelChecklist";
+import { LlamaCppPage } from "./models/LlamaCppSetup";
 import { LocalModelsTable, YourSystem } from "./models/LocalModels";
 import { PickModelDialog } from "./models/PickModelDialog";
 import { ProviderGroups } from "./models/ProviderGroups";
@@ -159,13 +160,34 @@ export function ModelsTab() {
     );
   }
 
+  const removeKeyFooter = <ProviderKeyFooter info={info} credentialed={ps.credentialed} onRemove={ps.removeKey} />;
+  const localTables = (key = "", withTable = true) => (
+    <>
+      <YourSystem />
+      {withTable && <LocalModelsTable
+        key={key}
+        provider={ps.sel!}
+        curated={settings.models}
+        defaultModel={settings.model}
+        onChanged={refreshSettings}
+        onConfigure={(m) => setDialog(m)}
+      />}
+      {dialogEl}
+    </>
+  );
+
+  if (ps.sel === "llamacpp" && info?.setup_here) {
+    // UX-057: OpenWorker sets llama.cpp up and runs it on this Mac.
+    return (
+      <div>
+        <LlamaCppPage ps={ps} tp="set" footer={removeKeyFooter} onChanged={refreshSettings} after={localTables} />
+      </div>
+    );
+  }
+
   return (
     <div>
-      <ProviderForm
-        ps={ps}
-        tp="set"
-        footer={<ProviderKeyFooter info={info} credentialed={ps.credentialed} onRemove={ps.removeKey} />}
-      />
+      <ProviderForm ps={ps} tp="set" footer={removeKeyFooter} />
 
       {info?.env_key && (
         <p className="text-meta text-muted mt-3 leading-relaxed" data-testid="set-env-key-note">
@@ -180,17 +202,7 @@ export function ModelsTab() {
 
       {info?.kind === "local" ? (
         // A local provider: the machine, then what the server holds (UX-055).
-        <>
-          <YourSystem />
-          <LocalModelsTable
-            provider={ps.sel}
-            curated={settings.models}
-            defaultModel={settings.model}
-            onChanged={refreshSettings}
-            onConfigure={(m) => setDialog(m)}
-          />
-          {dialogEl}
-        </>
+        localTables()
       ) : info?.configured ? (
         <div className="mt-6">
           <div className={SEC_H + " mb-1.5"}>{t("manage.models")}</div>
