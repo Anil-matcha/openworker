@@ -1446,28 +1446,28 @@ function AutoApproveCard() {
           </span>
         </span>
       </label>
-      <div className="pt-3" data-testid="auto-approve-reviewer">
-        <div className="text-ui text-ink pb-1">{t("settingsx.auto_approve.reviewer_title")}</div>
-        {choices.map((c) => (
-          <label key={c} className="flex items-start gap-3 py-1.5">
-            <input
-              type="radio"
-              name="auto-approve-reviewer"
-              className="mt-0.5"
-              data-testid={`auto-approve-reviewer-${c}`}
-              checked={reviewer === c}
-              onChange={() => saveReviewer(c)}
-            />
-            <span>
-              <span className="block text-ui text-ink">{t(`settingsx.auto_approve.reviewer_${choiceKey(c)}`)}</span>
-              <span className="block text-meta text-muted">
-                {t(`settingsx.auto_approve.reviewer_${choiceKey(c)}_desc`)}
-              </span>
-            </span>
-          </label>
-        ))}
+      {/* Which reviewer judges the checks (OPE-224). Shown only when something uses it:
+          Auto-approve mode, or shadow evaluation, which records that reviewer's verdicts. */}
+      {(on || shadow) && (
+      <div className="pt-3 pl-7" data-testid="auto-approve-reviewer">
+        <div className="flex items-center gap-2.5">
+          <span className="text-ui text-ink">{t("settingsx.auto_approve.reviewer_title")}</span>
+          <select
+            value={reviewer}
+            data-testid="auto-approve-reviewer-select"
+            className="px-2 py-1.5 rounded-lg border border-line bg-paper text-ui text-ink outline-none focus:border-accent"
+            onChange={(e) => saveReviewer(e.target.value as ReviewerChoice)}
+          >
+            {choices.map((c) => (
+              <option key={c} value={c}>
+                {t(`settingsx.auto_approve.reviewer_${choiceKey(c)}`)}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className={FIELD_HELP}>{t(`settingsx.auto_approve.reviewer_${choiceKey(reviewer)}_desc`)}</div>
         {reviewer !== "session" && (
-          <div className="pl-7 pt-1" data-testid="auto-approve-reviewer-key">
+          <div className="pt-2" data-testid="auto-approve-reviewer-key">
             <div className="text-meta text-muted pb-1">{t("settingsx.auto_approve.reviewer_no_reasons")}</div>
             {keys[reviewer] ? (
               <div className="text-meta text-ok">{t("settingsx.auto_approve.reviewer_key_set")}</div>
@@ -1497,6 +1497,7 @@ function AutoApproveCard() {
           </div>
         )}
       </div>
+      )}
     </div>
   );
 }
