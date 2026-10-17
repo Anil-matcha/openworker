@@ -242,7 +242,9 @@ MATRIX: dict[str, ModelEntry] = {
         "Llama 4 Maverick · via Fireworks", _AGENTIC, 1_000_000
     ),
     # OpenRouter slugs are lowercase `<lab>/<model>` (checked against their catalog
-    # 2026-07-25); same labs as above, one key for all of them.
+    # 2026-07-25); same labs as above, one key for all of them. Kimi K2.6 and Llama 4
+    # Maverick declare image input (architecture.input_modalities, 2026-08-09); PDFs
+    # unverified over the compat surface, like Kimi K3 below.
     # openrouter.ai/z-ai/glm-5.2: 1,048,576 context, 163,840 completion (read 2026-09-08).
     "openrouter:z-ai/glm-5.2": ModelEntry(
         "GLM-5.2 · via OpenRouter", _AGENTIC, 1_048_576
@@ -258,13 +260,21 @@ MATRIX: dict[str, ModelEntry] = {
         1_048_576,
     ),
     "openrouter:moonshotai/kimi-k2.6": ModelEntry(
-        "Kimi K2.6 · via OpenRouter", _AGENTIC, 256_000
+        "Kimi K2.6 · via OpenRouter",
+        ModelCapabilities(
+            tools=True, vision=True, parallel_tool_calls=True, streaming=True
+        ),
+        256_000,
     ),
     "openrouter:deepseek/deepseek-v4-pro": ModelEntry(
         "DeepSeek V4 Pro · via OpenRouter", _AGENTIC, 128_000
     ),
     "openrouter:meta-llama/llama-4-maverick": ModelEntry(
-        "Llama 4 Maverick · via OpenRouter", _AGENTIC, 1_000_000
+        "Llama 4 Maverick · via OpenRouter",
+        ModelCapabilities(
+            tools=True, vision=True, parallel_tool_calls=True, streaming=True
+        ),
+        1_000_000,
     ),
     # NVIDIA Nemotron via OpenRouter (openrouter.ai/api/v1/models/<id>/endpoints, read
     # 2026-10-01). Paid endpoints only; the `:free` variants are left out on purpose (they
