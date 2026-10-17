@@ -934,6 +934,7 @@ def _run(args: argparse.Namespace) -> int:
     events: list[dict[str, Any]] = []
     outcome = "unknown"
     error_text: Optional[str] = None
+    raw_error = ""
     started = time.time()
 
     # Records are written INCREMENTALLY. An outer time limit may end the process with a
@@ -1150,6 +1151,10 @@ def _run(args: argparse.Namespace) -> int:
             if ev["type"] == EventType.ERROR.value:
                 outcome = "model_error"
                 error_text = str(ev["data"].get("error", ""))
+                # When the engine rewrote the message with friendly guidance, the
+                # provider's own wording is preserved here — surface it too, so a
+                # user grepping for the raw provider error still finds it.
+                raw_error = str(ev["data"].get("raw", "") or "")
                 break
             if ev["type"] == EventType.INTERRUPTED.value:
                 outcome = "interrupted"
@@ -1193,6 +1198,10 @@ def _run(args: argparse.Namespace) -> int:
         cause = str(getattr(provider, "last_cause", "") or "")
         if outcome == "model_error" and cause and cause not in why:
             why = f"{why} Cause: {cause}"
+        if raw_error.strip() and redact(raw_error.strip().splitlines()[-1])[:200] not in why:
+            # The engine's friendly rewrite replaced the provider's message; keep the
+            # original provider wording on stderr so it stays findable and greppable.
+            why = f"{why} (provider said: {redact(raw_error.strip().splitlines()[-1])[:200]})"
         print(f"openworker run: {why}", file=sys.stderr, flush=True)
     return EXIT_FINISHED if outcome == "completed" else EXIT_STOPPED
 
