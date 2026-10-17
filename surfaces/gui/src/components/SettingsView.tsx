@@ -1458,6 +1458,58 @@ function AutoApproveCard() {
           </span>
         </span>
       </label>
+      {/* Which reviewer judges the checks (OPE-224). Shown only when something uses it:
+          Auto-approve mode, or shadow evaluation, which records that reviewer's verdicts. */}
+      {(on || shadow) && (
+      <div className="pt-3 pl-7" data-testid="auto-approve-reviewer">
+        <div className="flex items-center gap-2.5">
+          <span className="text-ui text-ink">{t("settingsx.auto_approve.reviewer_title")}</span>
+          <select
+            value={reviewer}
+            data-testid="auto-approve-reviewer-select"
+            className="px-2 py-1.5 rounded-lg border border-line bg-paper text-ui text-ink outline-none focus:border-accent"
+            onChange={(e) => saveReviewer(e.target.value as ReviewerChoice)}
+          >
+            {choices.map((c) => (
+              <option key={c} value={c}>
+                {t(`settingsx.auto_approve.reviewer_${choiceKey(c)}`)}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className={FIELD_HELP}>{t(`settingsx.auto_approve.reviewer_${choiceKey(reviewer)}_desc`)}</div>
+        {reviewer !== "session" && (
+          <div className="pt-2" data-testid="auto-approve-reviewer-key">
+            <div className="text-meta text-muted pb-1">{t("settingsx.auto_approve.reviewer_no_reasons")}</div>
+            {keys[reviewer] ? (
+              <div className="text-meta text-ok">{t("settingsx.auto_approve.reviewer_key_set")}</div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <input
+                  type="password"
+                  autoComplete="off"
+                  className={INPUT}
+                  data-testid="auto-approve-reviewer-key-input"
+                  placeholder={t(`settingsx.auto_approve.reviewer_key_placeholder_${choiceKey(reviewer)}`)}
+                  value={keyDraft}
+                  onChange={(e) => setKeyDraft(e.target.value)}
+                />
+                <button
+                  type="button"
+                  className={BTN_ACCENT}
+                  data-testid="auto-approve-reviewer-key-save"
+                  disabled={!keyDraft.trim()}
+                  onClick={saveKey}
+                >
+                  {t("settingsx.auto_approve.reviewer_key_save")}
+                </button>
+              </div>
+            )}
+            {keyError && <div className="text-meta text-danger pt-1">{keyError}</div>}
+          </div>
+        )}
+      </div>
+      )}
       <label className="flex items-start gap-3 py-2 pl-7">
         <input
           type="checkbox"
@@ -1515,58 +1567,6 @@ function AutoApproveCard() {
             </>
           )}
         </div>
-      )}
-      {/* Which reviewer judges the checks (OPE-224). Shown only when something uses it:
-          Auto-approve mode, or shadow evaluation, which records that reviewer's verdicts. */}
-      {(on || shadow) && (
-      <div className="pt-3 pl-7" data-testid="auto-approve-reviewer">
-        <div className="flex items-center gap-2.5">
-          <span className="text-ui text-ink">{t("settingsx.auto_approve.reviewer_title")}</span>
-          <select
-            value={reviewer}
-            data-testid="auto-approve-reviewer-select"
-            className="px-2 py-1.5 rounded-lg border border-line bg-paper text-ui text-ink outline-none focus:border-accent"
-            onChange={(e) => saveReviewer(e.target.value as ReviewerChoice)}
-          >
-            {choices.map((c) => (
-              <option key={c} value={c}>
-                {t(`settingsx.auto_approve.reviewer_${choiceKey(c)}`)}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className={FIELD_HELP}>{t(`settingsx.auto_approve.reviewer_${choiceKey(reviewer)}_desc`)}</div>
-        {reviewer !== "session" && (
-          <div className="pt-2" data-testid="auto-approve-reviewer-key">
-            <div className="text-meta text-muted pb-1">{t("settingsx.auto_approve.reviewer_no_reasons")}</div>
-            {keys[reviewer] ? (
-              <div className="text-meta text-ok">{t("settingsx.auto_approve.reviewer_key_set")}</div>
-            ) : (
-              <div className="flex items-center gap-2">
-                <input
-                  type="password"
-                  autoComplete="off"
-                  className={INPUT}
-                  data-testid="auto-approve-reviewer-key-input"
-                  placeholder={t(`settingsx.auto_approve.reviewer_key_placeholder_${choiceKey(reviewer)}`)}
-                  value={keyDraft}
-                  onChange={(e) => setKeyDraft(e.target.value)}
-                />
-                <button
-                  type="button"
-                  className={BTN_ACCENT}
-                  data-testid="auto-approve-reviewer-key-save"
-                  disabled={!keyDraft.trim()}
-                  onClick={saveKey}
-                >
-                  {t("settingsx.auto_approve.reviewer_key_save")}
-                </button>
-              </div>
-            )}
-            {keyError && <div className="text-meta text-danger pt-1">{keyError}</div>}
-          </div>
-        )}
-      </div>
       )}
     </div>
   );

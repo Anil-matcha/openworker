@@ -2407,7 +2407,7 @@
       "title": "Auto-approve (experimental)",
       "enable": "Enable Auto-approve mode",
       "enable_desc": "Adds an <em>Auto-approve</em> option to the mode picker. In that mode, the reviewer you choose below checks each action that would normally need approval and clears the routine ones; anything doubtful still asks you. It can never allow something the rules block. One extra model call per check, billed to your usage.",
-      "shadow_title": "Shadow evaluation <faint>(for measuring)</faint>",
+      "shadow_title": "Shadow evaluation",
       "shadow_desc": "On any mode, the reviewer records what it <em>would</em> have decided next to your own choice — without changing anything. Lets you see how it would behave before trusting it. Also costs one model call per approval.",
       "reviewer_title": "Reviewer",
       "reviewer_session": "Session’s own model (default)",
