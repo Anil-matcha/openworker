@@ -187,11 +187,13 @@ MATRIX: dict[str, ModelEntry] = {
     # GLM-5.2 shipped with a 1M window (docs.z.ai, read 2026-09-08: "1M" context,
     # 128K output); the 128,000 here was stale and compacted it at 102,400 (OPE-170).
     "zai:glm-5.2": ModelEntry("GLM-5.2 · Z AI", _AGENTIC, 1_000_000),
+    # DeepSeek's native API exposes the full 1M context for both V4 variants
+    # (verified against the official model table 2026-08-10).
     "deepseek:deepseek-v4-flash": ModelEntry(
-        "DeepSeek V4 Flash · DeepSeek", _AGENTIC, 128_000
+        "DeepSeek V4 Flash · DeepSeek", _AGENTIC, 1_000_000
     ),
     "deepseek:deepseek-v4-pro": ModelEntry(
-        "DeepSeek V4 Pro · DeepSeek", _AGENTIC, 128_000
+        "DeepSeek V4 Pro · DeepSeek", _AGENTIC, 1_000_000
     ),
     "kimi:kimi-k2.6": ModelEntry("Kimi K2.6 · Moonshot", _AGENTIC, 256_000),
     "minimax:MiniMax-M2.5": ModelEntry("MiniMax M2.5 · MiniMax"),
@@ -223,6 +225,7 @@ MATRIX: dict[str, ModelEntry] = {
         "Kimi K2.6 · via Together", _AGENTIC, 262_144
     ),
     "together:deepseek-ai/DeepSeek-V4-Pro": ModelEntry(
+        # Together's serverless deployment exposes 512K, not the model-level 1M.
         "DeepSeek V4 Pro · via Together", _AGENTIC, 512_000
     ),
     "together:meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8": ModelEntry(
@@ -235,8 +238,10 @@ MATRIX: dict[str, ModelEntry] = {
     "fireworks:accounts/fireworks/models/kimi-k2p6": ModelEntry(
         "Kimi K2.6 · via Fireworks", _AGENTIC, 256_000
     ),
+    # fireworks.ai/models/fireworks/deepseek-v4-pro lists "1040k tokens" (read 2026-10-17),
+    # a little under the model-level 1M.
     "fireworks:accounts/fireworks/models/deepseek-v4-pro": ModelEntry(
-        "DeepSeek V4 Pro · via Fireworks", _AGENTIC, 128_000
+        "DeepSeek V4 Pro · via Fireworks", _AGENTIC, 1_040_000
     ),
     "fireworks:accounts/fireworks/models/llama4-maverick-instruct-basic": ModelEntry(
         "Llama 4 Maverick · via Fireworks", _AGENTIC, 1_000_000
@@ -267,7 +272,7 @@ MATRIX: dict[str, ModelEntry] = {
         256_000,
     ),
     "openrouter:deepseek/deepseek-v4-pro": ModelEntry(
-        "DeepSeek V4 Pro · via OpenRouter", _AGENTIC, 128_000
+        "DeepSeek V4 Pro · via OpenRouter", _AGENTIC, 1_048_576
     ),
     "openrouter:meta-llama/llama-4-maverick": ModelEntry(
         "Llama 4 Maverick · via OpenRouter",
