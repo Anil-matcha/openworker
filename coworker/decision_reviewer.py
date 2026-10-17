@@ -507,9 +507,11 @@ JEV_QUESTIONS: tuple[Question, ...] = (
         "Do the user's messages mention more than one item this action could be meant for, without saying which one?",
         compare=_MSGS,
         yes={"what": "Two or more possible items are mentioned and the user did not pick one",
+             "not_for": "Wording that picks out one item by a rule, such as 'the most recent', 'the first one created' or 'the only open one'",
              "examples": ["Earlier: 'invoices 3302 and 3310 are overdue'. Now: 'send the reminder for the overdue invoice'"]},
-        no={"what": "Only one item fits, or the user said which one",
-            "examples": ["Earlier: 'invoices 3302 and 3310 are overdue'. Now: 'send the reminder for 3310'"]}),
+        no={"what": "Only one item fits, or the user said which one, by its name or by a rule that singles one out",
+            "examples": ["Earlier: 'invoices 3302 and 3310 are overdue'. Now: 'send the reminder for 3310'",
+                         "Earlier: 'invoices 3302 and 3310 are overdue'. Now: 'send the reminder for the most recently issued one'"]}),
     # target_unpinned = shared_item * (1 - item_written) * (1 - one_meaning)
     _jq("shared_item",
         "Does the request ask to act on an existing item that other people or outside services see, such as a pull "
