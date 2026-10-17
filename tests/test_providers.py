@@ -516,6 +516,18 @@ def test_openrouter_vision_matches_declared_input_modalities():
         assert not capabilities_for(mid).vision, mid
 
 
+def test_qwen38_max_is_curated_vision_true():
+    """Qwen3.8 Max is multimodal, unlike the text-only Qwen3 Max — it needs its own
+    matrix entry so the blanket qwen-prefix heuristic (vision=False) doesn't strip
+    images client-side (issue: images silently replaced with a placeholder). The bare
+    Qwen3 Max entry is untouched by the fix."""
+    assert capabilities_for("qwen:qwen3.8-max").vision is True
+    assert capabilities_for("qwen:qwen3-max").vision is False
+    # the heuristic alone (no provider prefix) still can't tell the two apart — the
+    # matrix entry, not the heuristic, is what fixes this.
+    assert capabilities_for("qwen3.8-max").vision is False
+
+
 def test_matrix_labels_and_custom_model_fallback():
     from coworker.providers.matrix import MATRIX, model_labels
 

@@ -198,6 +198,20 @@ MATRIX: dict[str, ModelEntry] = {
     "kimi:kimi-k2.6": ModelEntry("Kimi K2.6 · Moonshot", _AGENTIC, 256_000),
     "minimax:MiniMax-M2.5": ModelEntry("MiniMax M2.5 · MiniMax"),
     "qwen:qwen3-max": ModelEntry("Qwen3 Max · Alibaba", _AGENTIC, 256_000),
+    # Qwen3.8 Max: multimodal (text/image/video/document) per Alibaba's model card, unlike
+    # the text-only Qwen3 Max above — needs its own entry so the qwen prefix heuristic in
+    # capabilities.py (vision=False for the whole family) doesn't strip images client-side
+    # (owner report 2026-08-02). PDF unverified over the compat surface, same caveat as
+    # Muse Spark, so it falls back via pdf_support.py too. Model Studio lists the GA id
+    # `qwen3.8-max` with a 1,000,000 context window (read 2026-10-17); the earlier
+    # `qwen3.8-max-preview` id is no longer listed.
+    "qwen:qwen3.8-max": ModelEntry(
+        "Qwen3.8 Max · Alibaba",
+        ModelCapabilities(
+            tools=True, vision=True, parallel_tool_calls=True, streaming=True
+        ),
+        1_000_000,
+    ),
     "xai:grok-4.3": ModelEntry("Grok 4.3 · xAI", _AGENTIC, 256_000),
     "mistral:mistral-large-latest": ModelEntry(
         "Mistral Large · Mistral", _AGENTIC, 128_000
