@@ -11,6 +11,7 @@ import asyncio
 import base64
 import binascii
 import json
+import logging
 import os
 import re
 import secrets
@@ -23,6 +24,8 @@ from typing import Any, Optional
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+
+logger = logging.getLogger("coworker.server.app")
 
 # Origins allowed to talk to the local sidecar. It binds to 127.0.0.1, but a page in the
 # user's own browser can still reach loopback — so without an origin gate, any website they
@@ -3114,6 +3117,14 @@ def create_app(manager: SessionManager) -> FastAPI:
                         # Title on the user's words the moment they land — never behind
                         # a long agentic turn (owner catch 2026-08-24).
                         manager._maybe_autotitle(session_id)
+            except Exception as exc:
+                # An unexpected raise out of the turn must not vanish: the task would otherwise
+                # die silently ("Task exception was never retrieved") and the GUI would only see
+                # turn_done. Surface it as an error event like the background-turn path does.
+                logger.warning("ws turn crashed for %s: %s", session_id, exc)
+                await manager.broadcast_session(
+                    session_id, {"type": "error", "data": {"error": str(exc)}}
+                )
             finally:
                 manager.mark_idle(session_id)
                 manager.save(session_id, engine)
