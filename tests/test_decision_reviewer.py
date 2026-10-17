@@ -98,7 +98,7 @@ def test_jev_request_is_structured_nouls_with_criteria():
     rv, rec = _rv(JEV)
     _review(rv)
     url, _, body = rec.bodies[0]
-    assert url.endswith("/v1/systemone") and body["model"] == "jev-1.13"
+    assert url.endswith("/v1/systemone") and body["model"] == "jev-1.13.0"
     assert isinstance(body["state"], dict)
     assert set(body["questions"]) == {q.name for q in JEV_QUESTIONS}
     for name, spec in body["questions"].items():
@@ -125,7 +125,7 @@ def test_cut_offs_and_models_are_frozen_per_backend():
     assert (DECISIONS.run_threshold, DECISIONS.risk_threshold, DECISIONS.stop_threshold) == (0.80, 0.40, 0.60)
     assert (JEV.run_threshold, JEV.risk_threshold, JEV.stop_threshold) == (0.90, 0.40, 0.60)
     assert DECISIONS.default_model == "gpt-6-luna"
-    assert JEV.default_model == "jev-1.13"  # pinned, not jev-latest
+    assert JEV.default_model == "jev-1.13.0"  # pinned, not jev-latest (the docs: versioned ids carry the patch number)
 
 
 # -- combining answers ---------------------------------------------------------------------

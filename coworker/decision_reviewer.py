@@ -750,7 +750,7 @@ class JevBackend(DecisionBackend):
     default_base_url = "https://api.typesafe.ai"
     # Pinned, so a vendor update can't silently change behaviour. Re-run the eval before
     # moving it.
-    default_model = "jev-1.13"
+    default_model = "jev-1.13.0"
     run_threshold = 0.90
 
     @property
