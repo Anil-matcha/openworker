@@ -1370,6 +1370,7 @@ function AutoApproveCard() {
   const [keyError, setKeyError] = useState("");
   const [summary, setSummary] = useState<ShadowSummary | null>(null);
   const [exported, setExported] = useState("");
+  const [exporting, setExporting] = useState(false);
 
   // Shadow results follow the chosen reviewer: reload when shadow turns on or the
   // reviewer changes, so the line never mixes reviewers (OPE-224).
@@ -1383,8 +1384,18 @@ function AutoApproveCard() {
   }, [shadow, reviewer]);
 
   const exportResults = async () => {
+    setExporting(true);
+    setExported("");
     const r = await exportShadowResults().catch(() => ({ ok: false } as { ok: boolean; path?: string }));
-    setExported(r.ok && r.path ? r.path : t("settingsx.auto_approve.shadow_export_failed"));
+    setExporting(false);
+    // The time makes a repeat export visibly new: the file name is per day, so the path
+    // alone would not change between clicks.
+    const time = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    setExported(
+      r.ok && r.path
+        ? t("settingsx.auto_approve.shadow_export_saved", { path: r.path, time })
+        : t("settingsx.auto_approve.shadow_export_failed"),
+    );
   };
 
   useEffect(() => {
@@ -1481,7 +1492,7 @@ function AutoApproveCard() {
             <>
               <div>
                 {t("settingsx.auto_approve.shadow_summary_counts", {
-                  checks: summary.checks, run: summary.run, asked: summary.asked, stopped: summary.stopped,
+                  count: summary.checks, run: summary.run, asked: summary.asked, stopped: summary.stopped,
                 })}
               </div>
               {summary.decided > 0 && (
@@ -1489,15 +1500,16 @@ function AutoApproveCard() {
               )}
               <button
                 type="button"
-                className="mt-1 text-accent hover:underline"
+                className="mt-1 text-accent hover:underline disabled:opacity-50"
                 data-testid="shadow-export"
+                disabled={exporting}
                 onClick={exportResults}
               >
-                {t("settingsx.auto_approve.shadow_export")}
+                {exporting ? t("settingsx.auto_approve.shadow_exporting") : t("settingsx.auto_approve.shadow_export")}
               </button>
               {exported && (
                 <div className="select-all break-all" data-testid="shadow-export-path">
-                  {t("settingsx.auto_approve.shadow_export_saved", { path: exported })}
+                  {exported}
                 </div>
               )}
             </>
