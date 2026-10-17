@@ -2503,6 +2503,18 @@ def create_app(manager: SessionManager) -> FastAPI:
         # every approval card while the human still decides. Independent of the live flag.
         return manager.set_auto_approve_shadow((body or {}).get("auto_approve_shadow", False))
 
+    @app.post("/v1/settings/auto-approve-reviewer")
+    def settings_set_auto_approve_reviewer(body: dict) -> dict[str, Any]:
+        # Which reviewer Auto-Approve uses (OPE-224): the session's own model (default),
+        # OpenAI Decisions or TypeSafe Jev. User-global; open sessions pick it up at once.
+        return manager.set_auto_approve_reviewer((body or {}).get("auto_approve_reviewer", "session"))
+
+    @app.post("/v1/settings/auto-approve-reviewer-key")
+    def settings_set_auto_approve_reviewer_key(body: dict) -> dict[str, Any]:
+        # The key a decision-model reviewer needs (OPE-224). Never echoed back.
+        body = body or {}
+        return manager.set_reviewer_key(body.get("reviewer", ""), body.get("api_key", ""))
+
     @app.post("/v1/settings/pdf")
     def settings_set_pdf(body: dict) -> dict[str, Any]:
         # Token savings (owner ask, 2026-07-17): fallback mode for models without native

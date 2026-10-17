@@ -23,6 +23,9 @@ import {
   getTrustedWorkspaces,
   setAutoApprove,
   setAutoApproveShadow,
+  setAutoApproveReviewer,
+  setAutoApproveReviewerKey,
+  type ReviewerChoice,
   setCompactionSettings,
   setContextBar,
   setOnboarded,
@@ -1358,15 +1361,42 @@ function AutoApproveCard() {
   const { t } = useTranslation();
   const [on, setOn] = useState<boolean | null>(null);
   const [shadow, setShadow] = useState(false);
+  const [reviewer, setReviewer] = useState<ReviewerChoice>("session");
+  const [keys, setKeys] = useState<Record<string, boolean>>({});
+  const [keyDraft, setKeyDraft] = useState("");
+  const [keyError, setKeyError] = useState("");
 
   useEffect(() => {
     getSettings()
       .then((s) => {
         setOn(s.auto_approve === true);
         setShadow(s.auto_approve_shadow === true);
+        setReviewer(s.auto_approve_reviewer || "session");
+        setKeys(s.auto_approve_reviewer_keys || {});
       })
       .catch(() => setOn(false));
   }, []);
+
+  const saveReviewer = async (next: ReviewerChoice) => {
+    setReviewer(next);
+    setKeyDraft("");
+    setKeyError("");
+    await setAutoApproveReviewer(next);
+  };
+  const saveKey = async () => {
+    if (reviewer === "session" || !keyDraft.trim()) return;
+    const r = await setAutoApproveReviewerKey(reviewer, keyDraft.trim());
+    if (r.ok) {
+      setKeys(r.auto_approve_reviewer_keys || { ...keys, [reviewer]: true });
+      setKeyDraft("");
+      setKeyError("");
+    } else {
+      setKeyError(r.error || t("settingsx.auto_approve.reviewer_key_failed"));
+    }
+  };
+  const choices: ReviewerChoice[] = ["session", "openai-decisions", "jev"];
+  const choiceKey = (c: ReviewerChoice) =>
+    c === "session" ? "session" : c === "openai-decisions" ? "decisions" : "jev";
 
   const saveOn = async (next: boolean) => {
     setOn(next);
@@ -1416,6 +1446,57 @@ function AutoApproveCard() {
           </span>
         </span>
       </label>
+      <div className="pt-3" data-testid="auto-approve-reviewer">
+        <div className="text-ui text-ink pb-1">{t("settingsx.auto_approve.reviewer_title")}</div>
+        {choices.map((c) => (
+          <label key={c} className="flex items-start gap-3 py-1.5">
+            <input
+              type="radio"
+              name="auto-approve-reviewer"
+              className="mt-0.5"
+              data-testid={`auto-approve-reviewer-${c}`}
+              checked={reviewer === c}
+              onChange={() => saveReviewer(c)}
+            />
+            <span>
+              <span className="block text-ui text-ink">{t(`settingsx.auto_approve.reviewer_${choiceKey(c)}`)}</span>
+              <span className="block text-meta text-muted">
+                {t(`settingsx.auto_approve.reviewer_${choiceKey(c)}_desc`)}
+              </span>
+            </span>
+          </label>
+        ))}
+        {reviewer !== "session" && (
+          <div className="pl-7 pt-1" data-testid="auto-approve-reviewer-key">
+            <div className="text-meta text-muted pb-1">{t("settingsx.auto_approve.reviewer_no_reasons")}</div>
+            {keys[reviewer] ? (
+              <div className="text-meta text-ok">{t("settingsx.auto_approve.reviewer_key_set")}</div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <input
+                  type="password"
+                  autoComplete="off"
+                  className={INPUT}
+                  data-testid="auto-approve-reviewer-key-input"
+                  placeholder={t(`settingsx.auto_approve.reviewer_key_placeholder_${choiceKey(reviewer)}`)}
+                  value={keyDraft}
+                  onChange={(e) => setKeyDraft(e.target.value)}
+                />
+                <button
+                  type="button"
+                  className={BTN_ACCENT}
+                  data-testid="auto-approve-reviewer-key-save"
+                  disabled={!keyDraft.trim()}
+                  onClick={saveKey}
+                >
+                  {t("settingsx.auto_approve.reviewer_key_save")}
+                </button>
+              </div>
+            )}
+            {keyError && <div className="text-meta text-danger pt-1">{keyError}</div>}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
