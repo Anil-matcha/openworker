@@ -1461,7 +1461,7 @@ function AutoApproveCard() {
       {/* Which reviewer judges the checks (OPE-224). Shown only when something uses it:
           Auto-approve mode, or shadow evaluation, which records that reviewer's verdicts. */}
       {(on || shadow) && (
-      <div className="pt-3 pl-7" data-testid="auto-approve-reviewer">
+      <div className="py-2" data-testid="auto-approve-reviewer">
         <div className="flex items-center gap-2.5">
           <span className="text-ui text-ink">{t("settingsx.auto_approve.reviewer_title")}</span>
           <select
@@ -1510,7 +1510,7 @@ function AutoApproveCard() {
         )}
       </div>
       )}
-      <label className="flex items-start gap-3 py-2 pl-7">
+      <label className="flex items-start gap-3 py-2">
         <input
           type="checkbox"
           className="mt-0.5"
@@ -1531,7 +1531,7 @@ function AutoApproveCard() {
         </span>
       </label>
       {shadow && summary && (
-        <div className="pl-14 pb-1 text-meta text-muted" data-testid="shadow-summary">
+        <div className="pl-7 pb-1 text-meta text-muted" data-testid="shadow-summary">
           <div className="text-ink">
             {t("settingsx.auto_approve.shadow_summary_title", {
               days: summary.days,
