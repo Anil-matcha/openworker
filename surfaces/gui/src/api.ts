@@ -1325,6 +1325,29 @@ export async function setAutoApproveReviewer(
   return res.json();
 }
 
+export type ShadowSummary = {
+  reviewer: ReviewerChoice;
+  days: number;
+  checks: number;
+  run: number;
+  asked: number;
+  stopped: number;
+  decided: number;
+  matched: number;
+};
+
+/** Shadow results of the chosen reviewer, last 30 days (OPE-224). */
+export async function getShadowSummary(): Promise<ShadowSummary> {
+  const res = await fetch(`${httpBase()}/v1/settings/auto-approve-shadow-summary`);
+  return res.json();
+}
+
+/** Write every shadow check of the chosen reviewer to a CSV; returns where it was saved. */
+export async function exportShadowResults(): Promise<{ ok: boolean; path?: string; rows?: number; error?: string }> {
+  const res = await fetch(`${httpBase()}/v1/settings/auto-approve-shadow-export`, { method: "POST" });
+  return res.json();
+}
+
 /** Save the API key a decision-model reviewer needs. The key is never sent back. */
 export async function setAutoApproveReviewerKey(
   reviewer: "openai-decisions" | "jev",

@@ -2515,6 +2515,16 @@ def create_app(manager: SessionManager) -> FastAPI:
         body = body or {}
         return manager.set_reviewer_key(body.get("reviewer", ""), body.get("api_key", ""))
 
+    @app.get("/v1/settings/auto-approve-shadow-summary")
+    def settings_shadow_summary() -> dict[str, Any]:
+        # Shadow results of the chosen reviewer, last 30 days (OPE-224).
+        return manager.shadow_summary()
+
+    @app.post("/v1/settings/auto-approve-shadow-export")
+    def settings_shadow_export() -> dict[str, Any]:
+        # Every shadow check of the chosen reviewer as a readable CSV; returns its path.
+        return manager.export_shadow_csv()
+
     @app.post("/v1/settings/pdf")
     def settings_set_pdf(body: dict) -> dict[str, Any]:
         # Token savings (owner ask, 2026-07-17): fallback mode for models without native

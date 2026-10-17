@@ -384,3 +384,66 @@ def test_eval_stub_runs_each_decision_reviewer(backend, capsys):
     out = capsys.readouterr().out
     assert rc == 0, out
     assert f"{backend}:" in out
+
+
+# -- shadow results: summary and CSV export ---------------------------------------------------
+
+
+def _shadow(store, call, verdict, reviewer="jev", decision=None, approval="once"):
+    store.append({"session_id": "s1", "tool": "run_shell", "arguments": {"command": f"cmd {call}"},
+                  "stage": "reviewer_shadow", "status": verdict, "reason": f"r {call}",
+                  "call_id": call, "reviewer": reviewer})
+    if decision:
+        store.append({"session_id": "s1", "tool": "run_shell", "arguments": {}, "stage": "approval_resolved",
+                      "status": decision, "approval": approval, "call_id": call})
+
+
+def test_shadow_summary_counts_and_matches(tmp_path):
+    from coworker.audit import AuditStore
+
+    store = AuditStore(tmp_path / "a.db")
+    _shadow(store, "c1", "allow", decision="approved")   # run, you allowed: match
+    _shadow(store, "c2", "allow", decision="denied")     # run, you denied: no match
+    _shadow(store, "c3", "deny", decision="denied")      # stop, you denied: match
+    _shadow(store, "c4", "unsure", decision="approved")  # asked: not counted either way
+    _shadow(store, "c5", "allow")                        # never answered: not counted
+    _shadow(store, "c6", "deny", decision="denied", approval="auto_refused")  # nobody decided
+    _shadow(store, "c7", "allow", reviewer="openai-decisions", decision="approved")  # other reviewer
+    s = store.shadow_summary("jev")
+    assert (s["checks"], s["run"], s["asked"], s["stopped"]) == (6, 3, 1, 2)
+    assert (s["decided"], s["matched"]) == (3, 2)
+    assert store.shadow_summary("openai-decisions")["checks"] == 1
+
+
+def test_shadow_export_writes_a_readable_csv(client, tmp_path):
+    import csv
+
+    client.post("/v1/settings/auto-approve-reviewer", json={"auto_approve_reviewer": "jev"})
+    mgr = client.app.state.manager if hasattr(client.app.state, "manager") else None
+    store = mgr.audit_store if mgr else None
+    if store is None:
+        pytest.skip("manager not reachable from the test client")
+    _shadow(store, "c1", "allow", decision="denied")
+    summary = client.get("/v1/settings/auto-approve-shadow-summary").json()
+    assert summary["reviewer"] == "jev" and summary["checks"] == 1 and summary["matched"] == 0
+    r = client.post("/v1/settings/auto-approve-shadow-export").json()
+    assert r["ok"] and r["rows"] == 1 and r["path"].endswith(".csv")
+    with open(r["path"], encoding="utf-8-sig", newline="") as fh:
+        rows = list(csv.DictReader(fh))
+    assert rows[0]["reviewer would"] == "run" and rows[0]["your decision"] == "denied" and rows[0]["matched"] == "no"
+    assert "cmd c1" in rows[0]["action"]
+
+
+def test_engine_tags_shadow_rows_with_the_reviewer(tmp_path):
+    engine, rows, approvals = _engine(
+        tmp_path,
+        [_tool_turn(("run_shell", {"command": "git push"})), AssistantTurn(text="ok", finish_reason="stop")],
+        mode=__import__("coworker.permissions", fromlist=["Mode"]).Mode.INTERACTIVE,
+    )
+    engine.reviewer = _DecisionLike("allow")
+    engine.reviewer_shadow = True
+    engine.reviewer_choice = "jev"
+    _run(engine)
+    asyncio.run(engine.drain_shadow_reviews())
+    shadow = [r for r in rows if r.get("stage") == "reviewer_shadow"]
+    assert shadow and shadow[0]["reviewer"] == "jev"

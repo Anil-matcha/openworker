@@ -25,7 +25,10 @@ import {
   setAutoApproveShadow,
   setAutoApproveReviewer,
   setAutoApproveReviewerKey,
+  getShadowSummary,
+  exportShadowResults,
   type ReviewerChoice,
+  type ShadowSummary,
   setCompactionSettings,
   setContextBar,
   setOnboarded,
@@ -1365,6 +1368,24 @@ function AutoApproveCard() {
   const [keys, setKeys] = useState<Record<string, boolean>>({});
   const [keyDraft, setKeyDraft] = useState("");
   const [keyError, setKeyError] = useState("");
+  const [summary, setSummary] = useState<ShadowSummary | null>(null);
+  const [exported, setExported] = useState("");
+
+  // Shadow results follow the chosen reviewer: reload when shadow turns on or the
+  // reviewer changes, so the line never mixes reviewers (OPE-224).
+  useEffect(() => {
+    setExported("");
+    if (!shadow) {
+      setSummary(null);
+      return;
+    }
+    getShadowSummary().then(setSummary).catch(() => setSummary(null));
+  }, [shadow, reviewer]);
+
+  const exportResults = async () => {
+    const r = await exportShadowResults().catch(() => ({ ok: false } as { ok: boolean; path?: string }));
+    setExported(r.ok && r.path ? r.path : t("settingsx.auto_approve.shadow_export_failed"));
+  };
 
   useEffect(() => {
     getSettings()
@@ -1446,6 +1467,43 @@ function AutoApproveCard() {
           </span>
         </span>
       </label>
+      {shadow && summary && (
+        <div className="pl-14 pb-1 text-meta text-muted" data-testid="shadow-summary">
+          <div className="text-ink">
+            {t("settingsx.auto_approve.shadow_summary_title", {
+              days: summary.days,
+              reviewer: t(`settingsx.auto_approve.reviewer_${choiceKey(summary.reviewer)}`),
+            })}
+          </div>
+          {summary.checks === 0 ? (
+            <div>{t("settingsx.auto_approve.shadow_summary_empty")}</div>
+          ) : (
+            <>
+              <div>
+                {t("settingsx.auto_approve.shadow_summary_counts", {
+                  checks: summary.checks, run: summary.run, asked: summary.asked, stopped: summary.stopped,
+                })}
+              </div>
+              {summary.decided > 0 && (
+                <div>{t("settingsx.auto_approve.shadow_summary_matched", { matched: summary.matched, decided: summary.decided })}</div>
+              )}
+              <button
+                type="button"
+                className="mt-1 text-accent hover:underline"
+                data-testid="shadow-export"
+                onClick={exportResults}
+              >
+                {t("settingsx.auto_approve.shadow_export")}
+              </button>
+              {exported && (
+                <div className="select-all break-all" data-testid="shadow-export-path">
+                  {t("settingsx.auto_approve.shadow_export_saved", { path: exported })}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
       {/* Which reviewer judges the checks (OPE-224). Shown only when something uses it:
           Auto-approve mode, or shadow evaluation, which records that reviewer's verdicts. */}
       {(on || shadow) && (

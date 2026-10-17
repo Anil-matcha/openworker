@@ -2421,7 +2421,14 @@
       "reviewer_key_save": "Save key",
       "reviewer_key_placeholder_decisions": "OpenAI API key",
       "reviewer_key_placeholder_jev": "TypeSafe API key",
-      "reviewer_key_failed": "Couldn’t save the key."
+      "reviewer_key_failed": "Couldn’t save the key.",
+      "shadow_summary_title": "Shadow results · last {{days}} days, all sessions, {{reviewer}}",
+      "shadow_summary_counts": "{{checks}} checks: would have run {{run}} · asked you {{asked}} · stopped {{stopped}}",
+      "shadow_summary_matched": "Matched your own decision {{matched}} of {{decided}} times.",
+      "shadow_summary_empty": "Nothing recorded yet. Keep working as usual; each approval card you answer is recorded.",
+      "shadow_export": "Export full results",
+      "shadow_export_saved": "Saved to {{path}}",
+      "shadow_export_failed": "Couldn’t export the results."
     },
     "sandbox": {
       "title": "Sandbox",

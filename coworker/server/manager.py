@@ -4936,6 +4936,37 @@ class SessionManager:
             result = {"ok": True, "auto_approve_reviewer_keys": self.reviewer_key_status()}
         return result
 
+    def shadow_summary(self) -> dict[str, Any]:
+        """Shadow results of the currently chosen reviewer, last 30 days (OPE-224)."""
+        return self.audit_store.shadow_summary(self.auto_approve_reviewer())
+
+    def export_shadow_csv(self) -> dict[str, Any]:
+        """Write every shadow check of the chosen reviewer (last 30 days) to a readable CSV
+        and return its path, for a person to investigate in a spreadsheet (OPE-224)."""
+        import csv
+        from datetime import date
+
+        reviewer = self.auto_approve_reviewer()
+        rows = self.audit_store.shadow_rows(reviewer)
+        out_dir = self._data_base / "shadow-results"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        path = out_dir / f"shadow-{reviewer}-{date.today().isoformat()}.csv"
+        would = {"allow": "run", "unsure": "ask you", "deny": "stop"}
+        yours = {"approved": "allowed", "denied": "denied", "": "not answered"}
+        with path.open("w", newline="", encoding="utf-8-sig") as fh:
+            w = csv.writer(fh)
+            w.writerow(["time (UTC)", "session", "tool", "action", "reviewer",
+                        "reviewer would", "reviewer reason", "your decision", "matched"])
+            for r in rows:
+                v, d = r["verdict"], r["decision"]
+                if v == "unsure" or not d:
+                    matched = ""
+                else:
+                    matched = "yes" if (v, d) in (("allow", "approved"), ("deny", "denied")) else "no"
+                w.writerow([r["timestamp"], r["session_id"], r["tool"], r["args"], reviewer,
+                            would.get(v, v), r["reason"], yours.get(d, d), matched])
+        return {"ok": True, "path": str(path), "rows": len(rows)}
+
     def set_auto_approve(self, on: Any) -> dict[str, Any]:
         self._prefs["auto_approve"] = bool(on)
         self._save_prefs()
