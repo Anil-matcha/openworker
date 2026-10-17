@@ -368,7 +368,8 @@ def test_deepseek_v4_context_windows_match_provider_limits():
         "deepseek:deepseek-v4-flash": 1_000_000,
         "deepseek:deepseek-v4-pro": 1_000_000,
         "together:deepseek-ai/DeepSeek-V4-Pro": 512_000,
-        "fireworks:accounts/fireworks/models/deepseek-v4-pro": 1_048_576,
+        # Fireworks lists "1040k tokens" for its deployment (read 2026-10-17).
+        "fireworks:accounts/fireworks/models/deepseek-v4-pro": 1_040_000,
         "openrouter:deepseek/deepseek-v4-pro": 1_048_576,
     }
 
