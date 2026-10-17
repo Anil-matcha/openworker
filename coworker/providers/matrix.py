@@ -238,8 +238,10 @@ MATRIX: dict[str, ModelEntry] = {
     "fireworks:accounts/fireworks/models/kimi-k2p6": ModelEntry(
         "Kimi K2.6 · via Fireworks", _AGENTIC, 256_000
     ),
+    # fireworks.ai/models/fireworks/deepseek-v4-pro lists "1040k tokens" (read 2026-10-17),
+    # a little under the model-level 1M.
     "fireworks:accounts/fireworks/models/deepseek-v4-pro": ModelEntry(
-        "DeepSeek V4 Pro · via Fireworks", _AGENTIC, 1_048_576
+        "DeepSeek V4 Pro · via Fireworks", _AGENTIC, 1_040_000
     ),
     "fireworks:accounts/fireworks/models/llama4-maverick-instruct-basic": ModelEntry(
         "Llama 4 Maverick · via Fireworks", _AGENTIC, 1_000_000
