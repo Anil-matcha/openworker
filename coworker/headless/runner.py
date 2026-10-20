@@ -120,6 +120,12 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
         "--max-iterations", type=int, default=None, help="default: OpenWorker config (150)"
     )
     p.add_argument(
+        "--no-web-tools", action="store_true",
+        help="do not offer the web_search and web_fetch tools at all. For sealed evaluation "
+        "runs and air-gapped work: a network block only refuses the call, this keeps the "
+        "tools out of the model's menu, and the record says so.",
+    )
+    p.add_argument(
         "--provider-order",
         default=None,
         help="OpenRouter only: comma-separated upstream hosts to use, in order, with no "
@@ -864,6 +870,7 @@ def _run(args: argparse.Namespace) -> int:
         provider=provider,
         audit_sink=audit_sink,
         max_iterations=args.max_iterations,
+        web_tools=not args.no_web_tools,
         # The model's saved settings (model_config.py) first; the run's own flags win.
         # An isolated run reads nothing from the computer.
         model_settings=_merged_model_settings(args, model),
@@ -1387,6 +1394,8 @@ def _write_records(
             "auto_answer": args.attendance == "auto",
             "isolated": bool(args.isolated),
             "max_iterations": args.max_iterations,
+            # False = web_search / web_fetch were never in the tool list (--no-web-tools).
+            "web_tools": not args.no_web_tools,
             "max_output_tokens": args.max_output_tokens,
             "reasoning_effort": args.reasoning_effort,
             "compaction_cap_tokens": args.compaction_cap_tokens,
@@ -1445,6 +1454,7 @@ def _write_records(
             "approval_mode": args.approval_mode,
             # Questions were answered by rule (--auto-answer, or no terminal to ask on).
             "auto_answer": args.attendance == "auto",
+            "web_tools": not args.no_web_tools,
             "reasoning_effort": effort["label"],
             "reasoning_effort_detail": effort["detail"],
         },
