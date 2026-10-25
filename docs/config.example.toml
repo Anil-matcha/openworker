@@ -82,3 +82,6 @@ port = 8765
 # Managed relay WebSocket endpoint (Slack/GitHub inbound). Set to "" to disable
 # the relay entirely (manual Socket Mode still works).
 #cloud_relay_ws_url = "wss://l4z1paxb83.execute-api.us-east-1.amazonaws.com/ocw-connect"
+# Hosted machines service the Machines view proxies to. Set to "" to turn the
+# cloud machines surface off entirely.
+#cloud_machines_base = "https://machines.openworker.com"
