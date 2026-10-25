@@ -158,6 +158,8 @@ class SerperProvider(WebSearchProvider):
 
 class ExaProvider(WebSearchProvider):
     name = "exa"
+    display_name = "Exa"
+    key_url = "https://exa.ai"
     requires_key = True
 
     def __init__(self, api_key: str) -> None:
@@ -181,6 +183,7 @@ class ExaProvider(WebSearchProvider):
             },
             timeout=_TIMEOUT,
         )
+        resp.raise_for_status()
         data = resp.json()
         return [
             SearchResult(

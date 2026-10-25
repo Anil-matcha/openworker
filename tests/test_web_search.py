@@ -143,6 +143,7 @@ def test_exa_provider_parses_highlights(monkeypatch):
         captured.update(url=url, headers=headers, json=json)
         return httpx.Response(
             200,
+            request=httpx.Request("POST", url),
             json={
                 "results": [
                     {
@@ -182,7 +183,7 @@ def test_keyed_providers_raise_on_http_errors(monkeypatch):
 
     monkeypatch.setattr(httpx, "post", denied)
     monkeypatch.setattr(httpx, "get", denied)
-    for provider in (TavilyProvider("k"), BraveProvider("k"), SerperProvider("k")):
+    for provider in (TavilyProvider("k"), BraveProvider("k"), SerperProvider("k"), ExaProvider("k")):
         with pytest.raises(httpx.HTTPStatusError):
             provider.search("q")
 
