@@ -20,10 +20,12 @@ regression test. Keep unrelated cleanup on a separate branch.
 ## Prepare your fork
 
 Python 3.10 or newer and Node.js 20 are required by the project metadata and
-CI. Check `python3 --version` before running the bootstrap script: it currently
-uses that exact executable, and some macOS installations still provide Python
-3.9 as `python3`. For desktop development, install the platform prerequisites
-for Tauri 2; the browser UI and Python tests do not need a packaged desktop app.
+CI. The bootstrap script picks the newest Python 3.10+ on your `PATH` (it tries
+`python3.14` down to `python3`) and prints which one it chose; if none qualifies
+it lists what it checked and exits, so install a newer Python (macOS:
+`brew install python@3.13`) and rerun. For desktop development, install the
+platform prerequisites for Tauri 2; the browser UI and Python tests do not need
+a packaged desktop app.
 
 Fork the repository on GitHub, then run:
 
