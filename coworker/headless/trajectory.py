@@ -199,8 +199,11 @@ def build_trajectory(
         "total_steps": len(steps),
         "extra": {"outcome": outcome},
     }
-    if cost_known and not cost_unknown:
+    if cost_known:
+        # The priced part of the run. When a call could not be priced (unknown model,
+        # or no usage block) the total is a lower bound, and `cost_complete` says so.
         final_metrics["total_cost_usd"] = round(cost_total, 6)
+        final_metrics["extra"]["cost_complete"] = not cost_unknown
 
     return {
         "schema_version": SCHEMA_VERSION,
