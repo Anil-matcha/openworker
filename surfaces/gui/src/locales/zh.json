@@ -1372,6 +1372,7 @@
     "local_models_loading": "正在向服务器查询可用模型…",
     "local_models_failed": "无法连接服务器以列出模型。",
     "local_models_failed_ollama": "无法连接 Ollama 以列出模型。",
+    "settings_failed": "无法连接服务器以加载设置，请确认 OpenWorker 正在运行。",
     "retry": "重试"
   },
   "models": {

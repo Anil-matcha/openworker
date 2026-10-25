@@ -2271,9 +2271,16 @@ export async function runSandboxRemove(machineId?: string | null): Promise<{ ok:
   return res.json();
 }
 
-export async function getSettings(machineId?: string | null): Promise<ModelSettings> {
-  const res = await fetch(`${engineBase(machineId)}/v1/settings`);
-  return res.json();
+export async function getSettings(machineId?: string | null, timeoutMs = 10_000): Promise<ModelSettings> {
+  // A hung server must end in an error the page can show (#43), never an endless "Loading…".
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const res = await fetch(`${engineBase(machineId)}/v1/settings`, { signal: ctrl.signal });
+    return await res.json();
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 export async function setModelKey(
