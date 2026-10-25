@@ -184,6 +184,9 @@ def test_firecrawl_maps_v2_search_response(monkeypatch):
     captured = {}
 
     class _Resp:
+        def raise_for_status(self):
+            pass
+
         def json(self):
             return {
                 "success": True,
@@ -220,7 +223,13 @@ def test_keyed_providers_raise_on_http_errors(monkeypatch):
 
     monkeypatch.setattr(httpx, "post", denied)
     monkeypatch.setattr(httpx, "get", denied)
-    for provider in (TavilyProvider("k"), BraveProvider("k"), SerperProvider("k"), ExaProvider("k")):
+    for provider in (
+        TavilyProvider("k"),
+        BraveProvider("k"),
+        SerperProvider("k"),
+        ExaProvider("k"),
+        FirecrawlProvider("k"),
+    ):
         with pytest.raises(httpx.HTTPStatusError):
             provider.search("q")
 

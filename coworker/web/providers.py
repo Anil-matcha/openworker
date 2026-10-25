@@ -200,6 +200,8 @@ class FirecrawlProvider(WebSearchProvider):
     """Firecrawl web search (https://docs.firecrawl.dev) via the v2 REST API."""
 
     name = "firecrawl"
+    display_name = "Firecrawl"
+    key_url = "https://firecrawl.dev"
     requires_key = True
 
     def __init__(self, api_key: str) -> None:
@@ -214,6 +216,7 @@ class FirecrawlProvider(WebSearchProvider):
             json={"query": query, "limit": max_results},
             timeout=_TIMEOUT,
         )
+        resp.raise_for_status()
         data = resp.json()
         return [
             SearchResult(

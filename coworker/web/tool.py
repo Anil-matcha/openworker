@@ -59,6 +59,7 @@ PROVIDER_HOSTS = {
     "brave": "api.search.brave.com",
     "serper": "google.serper.dev",
     "exa": "api.exa.ai",
+    "firecrawl": "api.firecrawl.dev",
 }
 
 
