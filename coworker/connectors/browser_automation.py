@@ -708,7 +708,7 @@ def make_browser_automation_tools(
             browser_switch_tab,
             _schema(
                 "browser_switch_tab",
-                "Switch subsequent browser actions to the tab at an index returned by browser_list_tabs.",
+                "Switch subsequent browser actions to the tab at an index returned by browser_list_tabs. Requires approval.",
                 {"index": {"type": "integer"}},
                 ["index"],
             ),

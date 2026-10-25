@@ -147,7 +147,7 @@ TOOL_DEFS: tuple[ConnectorToolDef, ...] = (
         "browser",
         "browser_switch_tab",
         "Switch tab",
-        "read",
+        "write",
         "Switch subsequent browser actions to another tab.",
     ),
     ConnectorToolDef(
