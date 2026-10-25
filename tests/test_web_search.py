@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import pytest
 
+from coworker.sandbox.network_profiles import SEARCH_APIS
 from coworker.secrets import SecretStore
 from coworker.web import (
     SearchResult,
@@ -16,12 +17,14 @@ from coworker.web import (
     provider_names,
 )
 from coworker.web.providers import (
+    _PROVIDERS,
     BraveProvider,
     DuckDuckGoProvider,
     SerperProvider,
     TavilyProvider,
     WebSearchProvider,
 )
+from coworker.web.tool import PROVIDER_HOSTS
 
 
 class FakeProvider(WebSearchProvider):
@@ -94,6 +97,10 @@ def test_serper_sends_correct_request_and_maps_organic_results(monkeypatch):
 
     class _Resp:
         @staticmethod
+        def raise_for_status():
+            pass
+
+        @staticmethod
         def json():
             return {
                 "organic": [
@@ -121,6 +128,34 @@ def test_serper_sends_correct_request_and_maps_organic_results(monkeypatch):
     assert results[0].title == "Example Title"
     assert results[0].url == "https://example.com"
     assert results[0].snippet == "An example snippet."
+
+
+def test_keyed_providers_raise_on_http_errors(monkeypatch):
+    """A 401/429/5xx surfaces as an error instead of an empty result list."""
+    import httpx
+
+    def denied(url, **kwargs):
+        return httpx.Response(401, request=httpx.Request("POST", url))
+
+    monkeypatch.setattr(httpx, "post", denied)
+    monkeypatch.setattr(httpx, "get", denied)
+    for provider in (TavilyProvider("k"), BraveProvider("k"), SerperProvider("k")):
+        with pytest.raises(httpx.HTTPStatusError):
+            provider.search("q")
+
+
+def test_every_provider_has_a_name_and_a_key_page():
+    for name, cls in _PROVIDERS.items():
+        assert cls.name == name and cls.display_name, name
+        assert bool(cls.key_url) == cls.requires_key, name  # keyless providers have no key page
+
+
+def test_every_provider_is_known_to_the_site_wall():
+    """`web_search` has no url argument: the sandbox's allowed-sites wall checks the
+    provider's host (PROVIDER_HOSTS), and the Access page offers it under Search."""
+    for name in provider_names():
+        host = PROVIDER_HOSTS[name]
+        assert host in SEARCH_APIS, (name, host)
 
 
 def test_tool_surfaces_missing_key_error(tmp_path):

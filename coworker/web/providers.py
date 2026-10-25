@@ -26,6 +26,10 @@ class SearchResult:
 
 class WebSearchProvider(ABC):
     name: str = "base"
+    # What Settings shows for this provider, and where a person gets a key (empty when the
+    # provider is keyless).
+    display_name: str = ""
+    key_url: str = ""
     requires_key: bool = False
 
     @abstractmethod
@@ -36,6 +40,7 @@ class DuckDuckGoProvider(WebSearchProvider):
     """Keyless default via the `ddgs` library."""
 
     name = "duckduckgo"
+    display_name = "DuckDuckGo"
     requires_key = False
 
     def search(self, query: str, max_results: int = 5) -> list[SearchResult]:
@@ -54,6 +59,8 @@ class DuckDuckGoProvider(WebSearchProvider):
 
 class TavilyProvider(WebSearchProvider):
     name = "tavily"
+    display_name = "Tavily"
+    key_url = "https://tavily.com"
     requires_key = True
 
     def __init__(self, api_key: str) -> None:
@@ -67,6 +74,7 @@ class TavilyProvider(WebSearchProvider):
             json={"api_key": self.api_key, "query": query, "max_results": max_results},
             timeout=_TIMEOUT,
         )
+        resp.raise_for_status()
         data = resp.json()
         return [
             SearchResult(
@@ -80,6 +88,8 @@ class TavilyProvider(WebSearchProvider):
 
 class BraveProvider(WebSearchProvider):
     name = "brave"
+    display_name = "Brave Search"
+    key_url = "https://brave.com/search/api"
     requires_key = True
 
     def __init__(self, api_key: str) -> None:
@@ -97,6 +107,7 @@ class BraveProvider(WebSearchProvider):
             params={"q": query, "count": max_results},
             timeout=_TIMEOUT,
         )
+        resp.raise_for_status()
         data = resp.json()
         return [
             SearchResult(
@@ -117,6 +128,8 @@ class SerperProvider(WebSearchProvider):
     """
 
     name = "serper"
+    display_name = "Serper"
+    key_url = "https://serper.dev"
     requires_key = True
 
     def __init__(self, api_key: str) -> None:
@@ -131,6 +144,7 @@ class SerperProvider(WebSearchProvider):
             json={"q": query, "num": max_results},
             timeout=_TIMEOUT,
         )
+        resp.raise_for_status()
         data = resp.json()
         return [
             SearchResult(
