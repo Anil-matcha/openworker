@@ -9,7 +9,6 @@ lazy-imported.
 
 from __future__ import annotations
 
-import os
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Optional
@@ -33,6 +32,10 @@ class WebSearchProvider(ABC):
     # provider is keyless).
     display_name: str = ""
     key_url: str = ""
+    # Whether the provider takes a key: "none" (keyless), "optional" (works keyless, uses a
+    # key when one is configured) or "required". `requires_key` / `accepts_key` say the same
+    # thing for the callers that check one flag.
+    key_mode: str = "none"
     requires_key: bool = False
     # Keyless provider that still uses a key when one is configured (better quota/features).
     # `build_provider` passes the key through instead of dropping it.
@@ -47,6 +50,7 @@ class DuckDuckGoProvider(WebSearchProvider):
 
     name = "duckduckgo"
     display_name = "DuckDuckGo"
+    key_mode = "none"
     requires_key = False
 
     def search(self, query: str, max_results: int = 5) -> list[SearchResult]:
@@ -66,13 +70,19 @@ class DuckDuckGoProvider(WebSearchProvider):
 class YouProvider(WebSearchProvider):
     """You.com — keyless out of the box, better with a key.
 
-    Without a key it hits the free agents endpoint (100 searches/day, rate-limited per IP),
-    so it works in a fresh install like `duckduckgo` does. With a key it hits the Search API
-    (`YOU_API_KEY`, or `YDC_API_KEY` — the name You.com's own docs and SDKs use), which lifts
-    the quota. Both return the same `{"results": {"web": [...], "news": [...]}}` shape.
+    Without a key it hits the agents endpoint, so it works in a fresh install like
+    `duckduckgo` does. You.com does not document that endpoint and throttles it per IP
+    (about 100 queries a day, per third-party docs), so results may stop without notice.
+    With a key it hits the Search API, which lifts the quota. The key comes from the
+    SecretStore or the environment (`YOU_API_KEY`, or `YDC_API_KEY` — the name You.com's
+    own docs and SDKs use), resolved by `coworker.web.tool`, not here. Both endpoints
+    return the same `{"results": {"web": [...], "news": [...]}}` shape.
     """
 
     name = "you"
+    display_name = "You.com"
+    key_url = "https://you.com/platform"
+    key_mode = "optional"
     requires_key = False
     accepts_key = True
 
@@ -82,7 +92,7 @@ class YouProvider(WebSearchProvider):
     _USER_AGENT = "youdotcom-integration/andrewyng-openworker"
 
     def __init__(self, api_key: Optional[str] = None) -> None:
-        self.api_key = api_key or os.environ.get("YDC_API_KEY") or None
+        self.api_key = api_key or None
 
     def search(self, query: str, max_results: int = 5) -> list[SearchResult]:
         import httpx
@@ -96,6 +106,7 @@ class YouProvider(WebSearchProvider):
             params={"query": query, "count": max_results},
             timeout=_TIMEOUT,
         )
+        resp.raise_for_status()
         data = resp.json()
         results = data.get("results", {}) or {}
         # `count` applies per section; web first, news only fills any remainder.
@@ -114,6 +125,7 @@ class TavilyProvider(WebSearchProvider):
     name = "tavily"
     display_name = "Tavily"
     key_url = "https://tavily.com"
+    key_mode = "required"
     requires_key = True
 
     def __init__(self, api_key: str) -> None:
@@ -143,6 +155,7 @@ class BraveProvider(WebSearchProvider):
     name = "brave"
     display_name = "Brave Search"
     key_url = "https://brave.com/search/api"
+    key_mode = "required"
     requires_key = True
 
     def __init__(self, api_key: str) -> None:
@@ -183,6 +196,7 @@ class SerperProvider(WebSearchProvider):
     name = "serper"
     display_name = "Serper"
     key_url = "https://serper.dev"
+    key_mode = "required"
     requires_key = True
 
     def __init__(self, api_key: str) -> None:
@@ -213,6 +227,7 @@ class ExaProvider(WebSearchProvider):
     name = "exa"
     display_name = "Exa"
     key_url = "https://exa.ai"
+    key_mode = "required"
     requires_key = True
 
     def __init__(self, api_key: str) -> None:
@@ -254,6 +269,7 @@ class FirecrawlProvider(WebSearchProvider):
     name = "firecrawl"
     display_name = "Firecrawl"
     key_url = "https://firecrawl.dev"
+    key_mode = "required"
     requires_key = True
 
     def __init__(self, api_key: str) -> None:
