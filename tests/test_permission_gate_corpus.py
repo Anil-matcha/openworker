@@ -55,7 +55,7 @@ def test_every_permission_gate_row_executes_through_current_policy(monkeypatch):
     monkeypatch.setattr(PermissionEngine, "evaluate", recording_evaluate)
     report = run_permission_gate()
 
-    assert report.row_count == 120
+    assert report.row_count == len(rows)
     assert evaluated_tools == [row["action"]["tool"] for row in rows]
     assert report.current_mismatches == ()
     assert {result.actual for result in report.results} == {
