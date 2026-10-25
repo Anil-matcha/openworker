@@ -26,17 +26,30 @@ test("Settings opens as a full page and navigates sections", async ({ page }) =>
   await expect(page.getByTestId("set-provider-openai")).toBeVisible();
 });
 
-test("Models explains when the agent server cannot be reached", async ({ page }) => {
+// #43: when /v1/settings fails (server down, or hung past the 10 s timeout) Models says so
+// and offers Retry instead of "Loading…" forever; Retry reloads once the server answers.
+test("Models explains when the server cannot be reached, and Retry recovers", async ({ page }) => {
   await page.goto("/");
   await page.getByTestId("account-row").click();
   await page.getByRole("button", { name: "Settings", exact: true }).click();
 
-  await page.route("**/v1/settings", (route) => route.abort("failed"));
+  // Later routes win over the fixture's catch-all: fail GET /v1/settings until "the server
+  // comes back"; every other call keeps its fixture answer.
+  let serverDown = true;
+  await page.route("**/v1/settings", async (route) => {
+    if (route.request().method() === "GET" && serverDown) return route.abort("connectionrefused");
+    await route.fallback();
+  });
   await page.getByRole("button", { name: "Models & Keys", exact: true }).click();
 
-  await expect(page.getByText("Couldn't reach the agent server")).toBeVisible();
-  await expect(page.getByText("Make sure OpenWorker is running, then try again.")).toBeVisible();
-  await expect(page.getByTestId("settings-retry")).toBeVisible();
+  await expect(page.getByTestId("settings-error")).toContainText("Couldn't reach the server to load settings");
+  await expect(page.getByText("Loading…", { exact: true })).toHaveCount(0);
+  await expect(page.getByTestId("set-provider-openai")).toHaveCount(0);
+
+  serverDown = false;
+  await page.getByTestId("settings-retry").click();
+  await expect(page.getByTestId("set-provider-openai")).toBeVisible();
+  await expect(page.getByTestId("settings-error")).toHaveCount(0);
 });
 
 // The flag's "0" escape hatch hides the tab again (the default is on — UX-029).

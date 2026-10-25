@@ -118,15 +118,14 @@ export function ModelsTab() {
     } catch { /* private window */ }
   }, []);
 
+  // #43: a failed or hung settings fetch says so and offers Retry (same shape as the
+  // local-models status line below) instead of sitting on "Loading…" forever.
   if (settingsError) {
     return (
-      <div className="text-ui text-muted space-y-3">
-        <div>
-          <p className="text-ink font-medium">Couldn&apos;t reach the agent server</p>
-          <p className="mt-1">Make sure OpenWorker is running, then try again.</p>
-        </div>
-        <button className={BTN_BORDERED} onClick={refreshSettings} data-testid="settings-retry">
-          Retry
+      <div className="text-ui text-warnInk" data-testid="settings-error">
+        {t("manage.settings_failed")}{" "}
+        <button className="text-muted underline underline-offset-2 hover:text-ink" onClick={refreshSettings} data-testid="settings-retry">
+          {t("manage.retry")}
         </button>
       </div>
     );

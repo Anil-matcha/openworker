@@ -1389,6 +1389,7 @@
     "local_models_loading": "Asking the server which models it has…",
     "local_models_failed": "Couldn't reach the server to list its models.",
     "local_models_failed_ollama": "Couldn't reach Ollama to list its models.",
+    "settings_failed": "Couldn't reach the server to load settings — make sure OpenWorker is running.",
     "retry": "Retry"
   },
   "models": {
