@@ -325,7 +325,10 @@ MATRIX: dict[str, ModelEntry] = {
     # Bedrock ids carry a family segment (claude/ → native Anthropic path, other/ →
     # Converse) plus AWS's own `-v<n>:<m>` version suffix. Some regions require the
     # `us.`/`eu.` cross-region inference-profile prefix — custom add-model accepts those.
-    # Claude 5 generation (GA on Bedrock; ids from vendor catalog 2026-08-01):
+    # Claude 5 generation: ids from the AWS model cards (docs.aws.amazon.com/bedrock/
+    # latest/userguide/model-card-anthropic-claude-{fable-5,opus-5,sonnet-5}.html, read
+    # 2026-10-25). AWS publishes these without a `-v<n>:<m>` suffix; 1M context, image
+    # input, tool use — same as the native `anthropic:` rows above.
     "bedrock:claude/anthropic.claude-fable-5": ModelEntry(
         "Claude Fable 5 · AWS Bedrock", _AGENTIC_VISION, 1_000_000
     ),
