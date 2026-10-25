@@ -83,3 +83,20 @@ def test_buttons_still_used_where_the_platform_draws_them(tmp_path):
 
     assert manager.gateway.texts == []
     assert len(manager.gateway.interactive_sends) == 1
+
+
+def test_gateway_knows_which_real_adapters_draw_buttons():
+    """Both Slack adapters (Socket Mode and relay) send Block Kit buttons, so the gateway
+    must advertise them; Telegram falls back to text and must not."""
+    from coworker.connectors.adapters import SlackAdapter, TelegramAdapter
+    from coworker.connectors.gateway import Gateway
+    from coworker.connectors.relay_client import SlackRelayAdapter
+
+    assert SlackAdapter.supports_interactive is True
+    assert SlackRelayAdapter.supports_interactive is True
+    assert TelegramAdapter.supports_interactive is False
+
+    gateway = Gateway()
+    gateway.register(SlackRelayAdapter("wss://x", lambda: "jwt", teams={}))
+    assert gateway.supports_interactive("slack:T1:C1") is True
+    assert gateway.supports_interactive("telegram:12345") is False
