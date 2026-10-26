@@ -25,7 +25,9 @@ def capabilities_for(model: str) -> ModelCapabilities:
     # Ollama (local) models vary widely and many fake/mishandle parallel tool calls — assume
     # tools work (we only point at tool-capable models) but stay conservative otherwise.
     # Vision is detected from common model naming conventions (-vl, vision, llava, etc.).
-    if provider in ("ollama", "llamacpp", "vllm", "lmstudio"):
+    from .local_server import LOCAL_SERVERS
+
+    if provider == "ollama" or provider in LOCAL_SERVERS:
         _vision_patterns = ("-vl", "vision", "llava", "bakllava", "cogvlm", "minicpm-v")
         has_vision = any(p in name for p in _vision_patterns)
         return ModelCapabilities(
@@ -82,6 +84,15 @@ def capabilities_for(model: str) -> ModelCapabilities:
             "solar",
         )
     ):
+        return ModelCapabilities(
+            tools=True, vision=False, parallel_tool_calls=True, streaming=True
+        )
+
+    # Azure OpenAI: the id is the user's deployment name, which may say nothing about
+    # the model behind it (the GPT / o-series name checks above still apply when it
+    # does). Every current OpenAI model there calls tools in parallel; vision stays
+    # off until the name says otherwise, so images degrade to text instead of a 400.
+    if provider == "azure":
         return ModelCapabilities(
             tools=True, vision=False, parallel_tool_calls=True, streaming=True
         )

@@ -379,7 +379,11 @@ const PROVIDERS = [
   { name: "openai", title: "OpenAI", needs_key: true, fields: [{ key: "api_key", label: "OpenAI API key", secret: true, required: true, help: "", placeholder: "sk-…" }], configured: true, values: {}, suggested_models: ["gpt-5.5"], key_set_at: "2026-06-12", last_used_at: Math.floor(Date.now() / 1000) - 7200 },
   // anthropic: configured but never used ("Not used yet").
   { name: "anthropic", title: "Claude (Anthropic)", needs_key: true, fields: [{ key: "api_key", label: "API key", secret: true, required: true, help: "", placeholder: "sk-…" }], configured: true, values: {}, suggested_models: ["claude-opus-4-8"], key_set_at: null, last_used_at: null },
+  // azure: the user's own resource — a REQUIRED endpoint field (plain row, not the custom-endpoint
+  // disclosure) ahead of the key; no suggested models (ids are deployment names).
+  { name: "azure", title: "Azure OpenAI", needs_key: true, blurb: "Your own Azure OpenAI or Foundry resource, through its v1 API — model ids are your deployment names.", fields: [{ key: "endpoint", label: "Endpoint", secret: false, required: true, help: "Your resource's endpoint, from Keys and Endpoint in the Azure portal or the Foundry portal. /openai/v1 is added automatically; Foundry (…services.ai.azure.com) and sovereign-cloud hosts work too.", placeholder: "https://<resource>.openai.azure.com" }, { key: "api_key", label: "Azure OpenAI API key", secret: true, required: true, help: "", placeholder: "" }], configured: false, values: {}, suggested_models: [], key_set_at: null, last_used_at: null },
   // zai: an OpenAI-compatible vendor — unconfigured, with a prefilled editable endpoint + blurb.
+
   { name: "zai", title: "Z AI (GLM)", needs_key: true, blurb: "Uses Z AI's OpenAI-compatible API — the endpoint is prefilled, just add your key.", fields: [{ key: "api_key", label: "Z AI API key", secret: true, required: true, help: "", placeholder: "" }, { key: "base_url", label: "Endpoint", secret: false, required: false, help: "Prefilled with Z AI's international endpoint.", placeholder: "https://api.z.ai/api/paas/v4", default: "https://api.z.ai/api/paas/v4" }], configured: false, values: {}, suggested_models: ["glm-5.2"], key_set_at: null, last_used_at: null },
   // Ark uses two provider identities: BytePlus pay-as-you-go and Volcengine Agent Plan CN
   // have independent credentials, endpoints, and strict curated model lists.
@@ -2025,6 +2029,36 @@ export async function mockApi(page: import("@playwright/test").Page) {
         ? json({ ok: false, error: "Invalid API key." })
         : json({ ok: true });
     }
+    // a user-added OpenAI-compatible provider (backend create_custom_provider parity): the
+    // slug is checked, a built-in's name is refused, the card appears configured.
+    if (p.endsWith("/v1/providers/custom") && m === "POST") {
+      const b = req.postDataJSON();
+      const name = String(b.name || "").toLowerCase();
+      if (!/^[a-z][a-z0-9_-]{0,31}$/.test(name))
+        return json({ ok: false, error: "Route prefix must start with a letter and use only lowercase letters, numbers, - or _." });
+      if (providers.some((x) => x.name === name)) return json({ ok: false, error: "That route prefix is already in use." });
+      providers.push({
+        name, title: String(b.title || name), needs_key: true, is_custom: true, kind: "api_key",
+        blurb: "Uses the standard OpenAI Chat Completions API. Add model IDs manually below.",
+        fields: [
+          { key: "api_key", label: `${b.title} API key`, secret: true, required: true, help: "", placeholder: "" },
+          { key: "base_url", label: "Endpoint", secret: false, required: true, help: "An HTTPS OpenAI-compatible API base URL ending in /v1. HTTP is allowed only for local gateways.", placeholder: "https://…/v1" },
+        ],
+        configured: true, values: { base_url: b.fields?.base_url }, suggested_models: [], recommended_model: null,
+        key_set_at: "2026-10-26", last_used_at: null,
+      });
+      return json({ ok: true, provider: name, recommended_model: null });
+    }
+    // a custom provider's "Fetch from server": what its GET /models lists.
+    if (/\/v1\/providers\/[^/]+\/models$/.test(p) && m === "GET") {
+      const name = p.split("/").slice(-2)[0];
+      const prov = providers.find((x) => x.name === name);
+      if (prov?.is_custom) {
+        const row = (id: string) => ({ model: `${name}:${id}`, name: id, size_bytes: null, tools: null, thinking: null, vision: null, remote: true, parameter_size: null, quantization: null, context_max: null, context: null, context_from: "server", fit: "cloud", recommendation: null });
+        return json({ provider: name, alive: true, models: [row("acme-large"), row("acme-small")] });
+      }
+      return json({ provider: name, models: [], error: "no local model list for this provider" });
+    }
     // save a provider key — flips `configured`, stamps key_set_at (backend set_provider parity).
     if (p.endsWith("/v1/providers") && m === "POST") {
       const b = req.postDataJSON();
@@ -2047,6 +2081,11 @@ export async function mockApi(page: import("@playwright/test").Page) {
       const name = p.split("/").pop()!;
       const prov = providers.find((x) => x.name === name);
       if (!prov) return json({ ok: false, error: `unknown provider: ${name}` });
+      if (prov.is_custom) {
+        // Removing a custom provider removes the card itself (backend remove_provider parity).
+        providers.splice(providers.indexOf(prov), 1);
+        return json({ ok: true, provider: name });
+      }
       prov.configured = !prov.needs_key; // keyless (ollama) stays "configured"
       prov.key_set_at = null;
       return json({ ok: true, provider: name });
