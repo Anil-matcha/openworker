@@ -27,6 +27,7 @@ import qwen from "./logos/qwen.svg";
 import minimax from "./logos/minimax.svg";
 import xai from "./logos/xai.svg";
 import meta from "./logos/meta.svg";
+import nebius from "./logos/nebius.svg";
 
 export const PROVIDER_LOGOS: Record<string, string> = {
   anthropic,
@@ -48,6 +49,7 @@ export const PROVIDER_LOGOS: Record<string, string> = {
   "openrouter-account": openrouter,
   fireworks,
   together,
+  nebius,
   zai,
   kimi,
   deepseek,
@@ -80,6 +82,7 @@ export const PROVIDER_ORDER = [
   "qwen",
   "minimax",
   "xai",
+  "nebius",
 ];
 
 export function providerRank(name: string): number {

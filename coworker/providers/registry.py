@@ -729,6 +729,13 @@ DESCRIPTORS: list[ProviderDescriptor] = [
         "paste. The key OpenRouter issues stays on this machine.",
         auth="oauth",
     ),
+    _compat(
+        "nebius",
+        "Nebius Token Factory",
+        base_url="https://api.tokenfactory.nebius.com/v1",
+        recommended_model="zai-org/GLM-5.2",
+        env_key="NEBIUS_API_KEY",
+    ),
     ProviderDescriptor(
         name="ollama",
         title="Ollama",

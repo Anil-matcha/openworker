@@ -16,7 +16,7 @@ where the vendor spec wasn't re-checked stay ``None`` — the meter simply hides
 showing a made-up denominator. Values entered 2026-07-28 from vendor docs; verify alongside
 the id refresh.
 
-Resellers: Together + Fireworks + OpenRouter. TODO: add Groq entries here AND its
+Resellers: Together + Fireworks + OpenRouter + Nebius. TODO: add Groq entries here AND its
 descriptor in ``registry.py`` once the current provider surface is tested — deliberately
 deferred to bound how much needs verifying at once.
 """
@@ -380,6 +380,13 @@ MATRIX: dict[str, ModelEntry] = {
     ),
     "vertex:openweight/qwen/qwen3-coder-480b-a35b-instruct-maas": ModelEntry(
         "Qwen3 Coder · Vertex AI", _AGENTIC, 256_000
+    ),
+    # Nebius Token Factory keeps each lab's own namespace, like Together. Ids and windows
+    # from its public catalogue (tokenfactory.nebius.com/api/public/models_info, read
+    # 2026-10-25: `max_model_len` 1,048,576 for both; function_calling listed).
+    "nebius:zai-org/GLM-5.2": ModelEntry("GLM-5.2 · via Nebius", _AGENTIC, 1_048_576),
+    "nebius:deepseek-ai/DeepSeek-V4-Pro": ModelEntry(
+        "DeepSeek V4 Pro · via Nebius", _AGENTIC, 1_048_576
     ),
 }
 
