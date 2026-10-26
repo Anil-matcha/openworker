@@ -54,6 +54,7 @@ export const KEY_HELP: Record<string, { url: string; label: string; labelKey?: s
   xai: { url: "https://console.x.ai", label: "console.x.ai" },
   sambanova: { url: "https://cloud.sambanova.ai/apis", label: "cloud.sambanova.ai" },
   atlascloud: { url: "https://www.atlascloud.ai/console/api-keys", label: "atlascloud.ai" },
+  groq: { url: "https://console.groq.com/keys", label: "console.groq.com" },
 };
 
 export type Verify = { state: "idle" | "testing" | "ok" | "error"; msg?: string };
