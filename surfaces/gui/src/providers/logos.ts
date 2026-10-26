@@ -23,6 +23,7 @@ import together from "./logos/together.svg";
 import nvidia from "./logos/nvidia.svg";
 import sambanova from "./logos/sambanova.svg";
 import atlascloud from "./logos/atlascloud.svg";
+import novita from "./logos/novita.svg";
 import zai from "./logos/zai.svg";
 import kimi from "./logos/kimi.svg";
 import deepseek from "./logos/deepseek.svg";
@@ -58,6 +59,7 @@ export const PROVIDER_LOGOS: Record<string, string> = {
   nvidia,
   sambanova,
   atlascloud,
+  novita,
   zai,
   kimi,
   deepseek,
@@ -74,7 +76,6 @@ export const PROVIDER_ORDER = [
   "ark",
   "ark-agent-plan-cn",
   "meta",
-  "novita",
   "ollama",
   "llamacpp",
   "vllm",
@@ -97,6 +98,7 @@ export const PROVIDER_ORDER = [
   "nvidia",
   "sambanova",
   "atlascloud",
+  "novita",
 ];
 
 export function providerRank(name: string): number {

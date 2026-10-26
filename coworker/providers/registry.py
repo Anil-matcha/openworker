@@ -304,7 +304,7 @@ def _compat(
     title: str,
     *,
     base_url: str,
-    recommended_model: Optional[str] = None,
+    recommended_model: str,
     env_key: str,
     endpoint_help: str = "",
 ) -> ProviderDescriptor:
@@ -713,6 +713,7 @@ DESCRIPTORS: list[ProviderDescriptor] = [
         "novita",
         "Novita AI",
         base_url="https://api.novita.ai/openai/v1",
+        recommended_model="zai-org/glm-5.2",
         env_key="NOVITA_API_KEY",
         endpoint_help="Prefilled with Novita's OpenAI-compatible endpoint; keep it unless you use a regional or proxy variant.",
     ),

@@ -237,6 +237,10 @@ MATRIX: dict[str, ModelEntry] = {
     "atlascloud:zai-org/glm-5.2": ModelEntry(
         "GLM-5.2 · via Atlas Cloud", _AGENTIC, 1_048_576
     ),
+    # Novita fronts open-weight models under each lab's namespace. Id and window from
+    # api.novita.ai/openai/v1/models (keyless, read 2026-10-25: `context_size` 1,048,576,
+    # `features` lists function-calling).
+    "novita:zai-org/glm-5.2": ModelEntry("GLM-5.2 · via Novita", _AGENTIC, 1_048_576),
     # -- resellers (their model namespaces, verbatim) -----------------------------
     "together:thinkingmachines/Inkling": ModelEntry("Inkling · via Together"),
     # Together windows below are the `context_length` values its /v1/models catalog
