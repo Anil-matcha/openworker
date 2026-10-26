@@ -1,7 +1,7 @@
 // Settings ▸ Customization (UX-058): the Web search card lists the providers as radio rows
 // from GET /v1/web-search; a keyed provider without a key cannot be chosen; the right-hand
 // control reads Add key / Update key / In use; "Test and save" sends the key; the fetch
-// switch is live only while the active provider offers it.
+// option sits under the active provider only while it offers it.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 
@@ -79,7 +79,7 @@ vi.mock("../tauri", async (importOriginal) => {
 import { CustomizationTab } from "./CustomizationTab";
 
 const radio = (name: string) => screen.getByTestId(`websearch-radio-${name}`) as HTMLInputElement;
-const fetchSwitch = () => within(screen.getByTestId("websearch-fetch-toggle")).getByRole("switch");
+const fetchBox = () => screen.getByTestId("websearch-fetch-toggle") as HTMLInputElement;
 
 describe("Settings ▸ Customization ▸ Web search", () => {
   beforeEach(() => {
@@ -188,24 +188,33 @@ describe("Settings ▸ Customization ▸ Web search", () => {
     expect(screen.queryByTestId("websearch-key-remove")).toBeNull();
   });
 
-  it("the fetch switch is disabled with a note until the active provider offers it", async () => {
+  it("the fetch option appears under the active provider only when it offers it", async () => {
     render(<CustomizationTab />);
-    await screen.findByTestId("websearch-fetch-card");
-    expect(screen.getByText("Fetch pages through the search service")).toBeTruthy();
-    expect(screen.getByText("Off: pages are fetched from this machine. On: the search service fetches them, and sees each page address. Offered by Exa, Firecrawl and Tavily.")).toBeTruthy();
-    expect(screen.getByTestId("websearch-fetch-note").textContent).toBe("DuckDuckGo doesn't offer this. Choose Exa, Firecrawl or Tavily to turn it on.");
-    expect((fetchSwitch() as HTMLButtonElement).disabled).toBe(true);
-    fireEvent.click(fetchSwitch());
-    expect(setFetchViaProvider).not.toHaveBeenCalled();
+    await screen.findByTestId("websearch-providers");
+    // DuckDuckGo is active and does not fetch pages; Exa would, but is not active.
+    expect(screen.queryByTestId("websearch-fetch-row")).toBeNull();
+    expect(screen.queryByTestId("websearch-fetch-toggle")).toBeNull();
 
     fireEvent.click(radio("tavily"));
-    await waitFor(() => expect((fetchSwitch() as HTMLButtonElement).disabled).toBe(false));
-    expect(screen.queryByTestId("websearch-fetch-note")).toBeNull();
-    expect(screen.getByText(/On: Tavily fetches them/)).toBeTruthy();
-    expect(fetchSwitch().getAttribute("aria-checked")).toBe("false");
-    fireEvent.click(fetchSwitch());
+    await screen.findByTestId("websearch-fetch-row");
+    const row = screen.getByTestId("websearch-row-tavily");
+    expect(within(row).getByTestId("websearch-fetch-row")).toBeTruthy();
+    expect(within(row).getByText("Also fetch pages through Tavily")).toBeTruthy();
+    expect(within(row).getByText("Tavily then sees the address of every page the agent opens.")).toBeTruthy();
+    expect(fetchBox().checked).toBe(false);
+    fireEvent.click(fetchBox());
     await waitFor(() => expect(setFetchViaProvider).toHaveBeenCalledWith(true));
-    await waitFor(() => expect(fetchSwitch().getAttribute("aria-checked")).toBe("true"));
+    await waitFor(() => expect(fetchBox().checked).toBe(true));
+
+    // Moving to a provider without page fetching hides the option; the flag stays stored
+    // and comes back when a fetching provider is active again.
+    fireEvent.click(radio("brave"));
+    await waitFor(() => expect(radio("brave").checked).toBe(true));
+    expect(screen.queryByTestId("websearch-fetch-row")).toBeNull();
+    fireEvent.click(radio("tavily"));
+    await screen.findByTestId("websearch-fetch-row");
+    expect(fetchBox().checked).toBe(true);
+    expect(setFetchViaProvider).toHaveBeenCalledTimes(1);
   });
 
   it("an unreachable server shows one line instead of an empty page", async () => {

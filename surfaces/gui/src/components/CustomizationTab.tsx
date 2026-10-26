@@ -12,12 +12,12 @@ import {
 } from "../api";
 import { openExternal } from "../tauri";
 import { PanelHead } from "./IntegrationsView";
-import { Toggle } from "./Toggle";
 
 // Settings ▸ Customization (UX-058): the services OpenWorker uses behind its tools. Today
 // one section, Web search — the provider behind `web_search` as radio rows with a key per
-// service (kept in the machine's secret store; "Test and save" runs one search first) — and
-// the "Fetch pages through the search service" switch for `web_fetch`. Memory, speech
+// service (kept in the machine's secret store; "Test and save" runs one search first). The
+// active provider, when it can also read pages (Exa, Firecrawl, Tavily), carries one
+// indented option: "Also fetch pages through …" for `web_fetch`. Memory, speech
 // recognition and the browser come here later, as placeholders in the approved mock.
 // Same card idiom as the Sandbox page: one bordered card, hairline-divided rows, ghost
 // controls on the right, no new card types.
@@ -115,10 +115,12 @@ export function CustomizationTab({ machine }: { machine?: Machine | null }) {
     }
   };
 
-  const flipFetch = async (next: boolean) => {
+  // The flag is stored once; the server honours it only while the active provider offers
+  // page fetching, so it sits inert (and unseen here) under any other provider.
+  const flipFetch = async (p: WebSearchProviderInfo, next: boolean) => {
     if (!info) return;
     setInfo({ ...info, fetch_via_provider: next }); // optimistic; the reply settles it
-    apply(await setFetchViaProvider(next, machineId), "fetch");
+    apply(await setFetchViaProvider(next, machineId), p.name);
   };
 
   const statusLine = (p: WebSearchProviderInfo): string => {
@@ -127,10 +129,6 @@ export function CustomizationTab({ machine }: { machine?: Machine | null }) {
     const fixed = KEYLESS_STATUS[p.name];
     return fixed ? t(fixed) : "";
   };
-
-  const active = info?.providers.find((p) => p.name === info.provider) ?? null;
-  const fetchOffered = !!active?.supports_fetch;
-  const fetchService = fetchOffered && active ? active.display_name : t("customization.fetch.service_generic");
 
   return (
     <section data-testid="customization-tab">
@@ -259,6 +257,21 @@ export function CustomizationTab({ machine }: { machine?: Machine | null }) {
                       ) : null}
                     </div>
                   ) : null}
+                  {isActive && p.supports_fetch ? (
+                    <label className="mt-2 pl-7 flex items-start gap-2.5 cursor-pointer" data-testid="websearch-fetch-row">
+                      <input
+                        type="checkbox"
+                        className="mt-0.5"
+                        checked={info.fetch_via_provider}
+                        onChange={(e) => void flipFetch(p, e.target.checked)}
+                        data-testid="websearch-fetch-toggle"
+                      />
+                      <span className="min-w-0">
+                        <span className="block text-ui text-ink">{t("customization.fetch.row", { name: p.display_name })}</span>
+                        <span className="block text-meta text-muted">{t("customization.fetch.caution", { name: p.display_name })}</span>
+                      </span>
+                    </label>
+                  ) : null}
                   {rowError ? (
                     <div className="mt-1.5 pl-7 text-meta text-danger" data-testid="websearch-error">
                       {rowError}
@@ -270,32 +283,6 @@ export function CustomizationTab({ machine }: { machine?: Machine | null }) {
           </div>
           <p className="text-meta text-faint mt-2.5">{t("customization.websearch.footnote")}</p>
 
-          <div className={CARD + " mt-3.5 px-4 py-3 flex items-start gap-3"} data-testid="websearch-fetch-card">
-            <div className="flex-1 min-w-0">
-              <div className="text-ui font-medium text-ink">{t("customization.fetch.title")}</div>
-              <div className="text-meta text-muted leading-relaxed">
-                {t("customization.fetch.desc", { service: fetchService })}
-              </div>
-              {!fetchOffered ? (
-                <div className="text-meta text-faint mt-1" data-testid="websearch-fetch-note">
-                  {t("customization.fetch.unsupported", { service: active?.display_name ?? info.provider })}
-                </div>
-              ) : null}
-              {error && error.name === "fetch" ? (
-                <div className="mt-1.5 text-meta text-danger" data-testid="websearch-error">
-                  {error.text}
-                </div>
-              ) : null}
-            </div>
-            <span data-testid="websearch-fetch-toggle">
-              <Toggle
-                checked={fetchOffered && info.fetch_via_provider}
-                disabled={!fetchOffered}
-                onChange={(next) => void flipFetch(next)}
-                title={t("customization.fetch.title")}
-              />
-            </span>
-          </div>
         </>
       )}
     </section>

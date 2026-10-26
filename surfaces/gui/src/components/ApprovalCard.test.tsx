@@ -626,7 +626,7 @@ describe("ApprovalCard — §1.9 egress cards", () => {
     cleanup();
     render(<ApprovalCard item={fetchApproval({ fetchProvider: "exa" })} onApprove={vi.fn()} />);
     expect(screen.getByTestId("approval-fetch-provider").textContent).toBe(
-      "The page is fetched through exa, which sees its address.",
+      "The page is fetched by your search service, exa, which sees its address.",
     );
     // The page's own host still names the destination for the domain-shaped grant.
     expect(screen.getByText(/leaves this computer → bbc\.com/)).toBeTruthy();

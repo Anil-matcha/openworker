@@ -727,7 +727,7 @@
     "save_skill_footer": "Approving adds it to your skills on this computer — usable in every conversation from then on.",
     "search_note": "Queries go to your configured search provider.",
     "search_note_current": "Queries go to your configured search provider (currently: {{provider}}).",
-    "fetch_note_current": "The page is fetched through {{provider}}, which sees its address.",
+    "fetch_note_current": "The page is fetched by your search service, {{provider}}, which sees its address.",
     "reviewer_unsure": "reviewer wasn’t sure: {{note}}",
     "site_wall_note": "{{host}} is not on your allowed sites.",
     "network": {
@@ -2871,10 +2871,8 @@
       "failed": "That didn't work. Try again."
     },
     "fetch": {
-      "title": "Fetch pages through the search service",
-      "desc": "Off: pages are fetched from this machine. On: {{service}} fetches them, and sees each page address. Offered by Exa, Firecrawl and Tavily.",
-      "service_generic": "the search service",
-      "unsupported": "{{service}} doesn't offer this. Choose Exa, Firecrawl or Tavily to turn it on."
+      "row": "Also fetch pages through {{name}}",
+      "caution": "{{name}} then sees the address of every page the agent opens."
     }
   }
 }

@@ -716,7 +716,7 @@
     "save_skill_footer": "批准后会将其添加到本机的技能中 —— 此后每个会话都可使用。",
     "search_note": "查询会发送到你配置的搜索服务商。",
     "search_note_current": "查询会发送到你配置的搜索服务商（当前：{{provider}}）。",
-    "fetch_note_current": "该网页通过 {{provider}} 抓取，它会看到网页地址。",
+    "fetch_note_current": "该网页由你的搜索服务 {{provider}} 抓取，它会看到网页地址。",
     "reviewer_unsure": "审查器不确定：{{note}}",
     "site_wall_note": "{{host}} 不在你允许的网站列表中。",
     "network": {
@@ -2831,10 +2831,8 @@
       "failed": "操作未成功，请重试。"
     },
     "fetch": {
-      "title": "通过搜索服务抓取网页",
-      "desc": "关闭：网页由本机抓取。开启：由 {{service}} 抓取，它会看到每个网页地址。Exa、Firecrawl 和 Tavily 提供此功能。",
-      "service_generic": "搜索服务",
-      "unsupported": "{{service}} 不提供此功能。选择 Exa、Firecrawl 或 Tavily 后即可开启。"
+      "row": "也通过 {{name}} 抓取网页",
+      "caution": "{{name}} 届时会看到智能体打开的每个网页的地址。"
     }
   }
 }

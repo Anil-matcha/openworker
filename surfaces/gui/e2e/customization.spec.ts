@@ -1,11 +1,11 @@
 // Settings ▸ Customization (UX-058): the Web search providers as radio rows with a key per
-// service, and the "Fetch pages through the search service" switch. The fixture answers
+// service, and the "Also fetch pages through …" option under the active one. The fixture answers
 // GET/POST /v1/web-search, PUT/DELETE /v1/web-search/keys/{name} and
 // POST /v1/web-search/fetch-via-provider from per-test state.
 import { expect } from "@playwright/test";
 import { test } from "./fixtures";
 
-test("customization: open the tab, add a key, pick the provider, flip the fetch switch", async ({ page }) => {
+test("customization: open the tab, add a key, pick the provider, tick the fetch option", async ({ page }) => {
   await page.goto("/#/settings/customization");
   const tab = page.getByTestId("customization-tab");
   await expect(tab).toBeVisible();
@@ -38,25 +38,31 @@ test("customization: open the tab, add a key, pick the provider, flip the fetch 
   await expect(page.getByTestId("websearch-status-exa")).toHaveText("Key saved");
   await expect(page.getByTestId("websearch-key-button-exa")).toHaveText("Update key");
 
-  // Now it can be picked; the pill moves and the fetch switch comes alive (Exa offers it).
-  const fetchSwitch = page.getByTestId("websearch-fetch-toggle").getByRole("switch");
-  await expect(fetchSwitch).toBeDisabled();
-  await expect(page.getByTestId("websearch-fetch-note")).toContainText("DuckDuckGo doesn't offer this.");
+  // Now it can be picked; the pill moves and, since Exa reads pages, its row gains the option.
+  await expect(page.getByTestId("websearch-fetch-row")).toHaveCount(0);
   await page.getByTestId("websearch-radio-exa").click();
   await expect(page.getByTestId("websearch-in-use-exa")).toHaveText("In use");
   await expect(page.getByTestId("websearch-in-use-duckduckgo")).toHaveCount(0);
-  await expect(fetchSwitch).toBeEnabled();
-  await expect(page.getByTestId("websearch-fetch-note")).toHaveCount(0);
-  await expect(page.getByText(/On: Exa fetches them, and sees each page address\./)).toBeVisible();
-
-  await expect(fetchSwitch).toHaveAttribute("aria-checked", "false");
-  await fetchSwitch.click();
-  await expect(fetchSwitch).toHaveAttribute("aria-checked", "true");
+  const exaRow = page.getByTestId("websearch-row-exa");
+  await expect(exaRow.getByTestId("websearch-fetch-row")).toBeVisible();
+  await expect(exaRow.getByText("Also fetch pages through Exa")).toBeVisible();
+  await expect(exaRow.getByText("Exa then sees the address of every page the agent opens.")).toBeVisible();
+  const fetchBox = page.getByTestId("websearch-fetch-toggle");
+  await expect(fetchBox).not.toBeChecked();
+  await fetchBox.click();
+  await expect(fetchBox).toBeChecked();
 
   // The choice survives a reload: the fixture holds it like the server would.
   await page.reload();
   await expect(page.getByTestId("websearch-in-use-exa")).toBeVisible();
-  await expect(page.getByTestId("websearch-fetch-toggle").getByRole("switch")).toHaveAttribute("aria-checked", "true");
+  await expect(page.getByTestId("websearch-fetch-toggle")).toBeChecked();
+  // Under a provider that does not read pages the option is not shown (the flag stays stored).
+  await page.getByTestId("websearch-radio-tavily").click();
+  await expect(page.getByTestId("websearch-in-use-tavily")).toBeVisible();
+  await expect(page.getByTestId("websearch-row-tavily").getByTestId("websearch-fetch-toggle")).toBeChecked();
+  await page.getByTestId("websearch-radio-you").click();
+  await expect(page.getByTestId("websearch-in-use-you")).toBeVisible();
+  await expect(page.getByTestId("websearch-fetch-row")).toHaveCount(0);
 });
 
 test("customization: removing the active provider's only key falls back to DuckDuckGo", async ({ page }) => {
