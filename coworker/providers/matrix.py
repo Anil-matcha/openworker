@@ -16,7 +16,7 @@ where the vendor spec wasn't re-checked stay ``None`` — the meter simply hides
 showing a made-up denominator. Values entered 2026-07-28 from vendor docs; verify alongside
 the id refresh.
 
-Resellers: Together + Fireworks + OpenRouter + Nebius + OrcaRouter. TODO: add Groq entries here AND its
+Resellers: Together + Fireworks + OpenRouter + Nebius + OrcaRouter + NVIDIA NIM. TODO: add Groq entries here AND its
 descriptor in ``registry.py`` once the current provider surface is tested — deliberately
 deferred to bound how much needs verifying at once.
 """
@@ -334,6 +334,21 @@ MATRIX: dict[str, ModelEntry] = {
     ),
     "orcarouter:deepseek/deepseek-v4-pro": ModelEntry(
         "DeepSeek V4 Pro · via OrcaRouter", _AGENTIC, 1_048_576
+    ),
+    # NVIDIA NIM — NVIDIA's own `vendor/model` namespace, so its models repeat the word in
+    # the routed id. Ids from integrate.api.nvidia.com/v1/models (keyless, read 2026-10-25;
+    # the earlier llama-3.3-nemotron-super-49b, z-ai/glm-5.2 and deepseek-v4-pro ids are
+    # no longer listed). Windows from the build.nvidia.com model pages the same day, which
+    # list "1M" context for all three. Text-only; tool calling as on the OpenRouter and
+    # Bedrock rows for the same models.
+    "nvidia:nvidia/nemotron-3-super-120b-a12b": ModelEntry(
+        "Nemotron 3 Super · via NVIDIA", _AGENTIC, 1_000_000
+    ),
+    "nvidia:nvidia/nemotron-3-ultra-550b-a55b": ModelEntry(
+        "Nemotron 3 Ultra · via NVIDIA", _AGENTIC, 1_000_000
+    ),
+    "nvidia:nvidia/nemotron-3.5-lightning-30b-a3b": ModelEntry(
+        "Nemotron 3.5 Lightning · via NVIDIA", _AGENTIC, 1_000_000
     ),
     # -- cloud accounts (models running in the user's own AWS/GCP) ----------------
     # Bedrock ids carry a family segment (claude/ → native Anthropic path, other/ →
