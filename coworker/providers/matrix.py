@@ -16,9 +16,8 @@ where the vendor spec wasn't re-checked stay ``None`` — the meter simply hides
 showing a made-up denominator. Values entered 2026-07-28 from vendor docs; verify alongside
 the id refresh.
 
-Resellers: Together + Fireworks + OpenRouter + Nebius + OrcaRouter + NVIDIA NIM. TODO: add Groq entries here AND its
-descriptor in ``registry.py`` once the current provider surface is tested — deliberately
-deferred to bound how much needs verifying at once.
+Resellers: Together + Fireworks + OpenRouter + Nebius + OrcaRouter + NVIDIA NIM
++ Groq (landed 2026-10-25, after the deferral of 2026-07-04).
 """
 
 from __future__ import annotations
@@ -443,13 +442,14 @@ MATRIX: dict[str, ModelEntry] = {
         "DeepSeek V4 Pro · via Nebius", _AGENTIC, 1_048_576
     ),
     # -- Groq (LPU inference) ---------------------------------------------------
-    "groq:llama-4-maverick-17b-128e-instruct": ModelEntry(
-        "Llama 4 Maverick · via Groq"
+    # Groq keeps its own short ids. Rows and windows from console.groq.com/docs/models
+    # (production table, read 2026-10-25: 131,072 context each; the earlier Maverick,
+    # R1-distill and QwQ ids are no longer listed). Tool use per console.groq.com/docs/tool-use.
+    "groq:llama-3.3-70b-versatile": ModelEntry(
+        "Llama 3.3 70B Versatile · via Groq", _AGENTIC, 131_072
     ),
-    "groq:deepseek-r1-distill-llama-70b": ModelEntry(
-        "DeepSeek R1 Distill 70B · via Groq"
-    ),
-    "groq:qwen-qwq-32b": ModelEntry("Qwen QwQ 32B · via Groq"),
+    "groq:openai/gpt-oss-120b": ModelEntry("GPT-OSS 120B · via Groq", _AGENTIC, 131_072),
+    "groq:openai/gpt-oss-20b": ModelEntry("GPT-OSS 20B · via Groq", _AGENTIC, 131_072),
 }
 
 
