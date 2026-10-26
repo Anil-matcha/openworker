@@ -217,24 +217,18 @@ MATRIX: dict[str, ModelEntry] = {
         "Mistral Large · Mistral", _AGENTIC, 128_000
     ),
     # -- SambaNova ---------------------------------------------------------------
-    # OpenAI-compatible API (verified against api.sambanova.ai/v1/models 2026-07-30).
+    # SambaCloud's OpenAI-compatible API; ids and windows are the `context_length` values
+    # api.sambanova.ai/v1/models reports (keyless, read 2026-10-25). The two 128k rows are
+    # the production tier on docs.sambanova.ai/docs/en/models/sambacloud-models; MiniMax
+    # M3.1 Flash is what the catalogue serves today in place of the M2.7/M3 previews.
     "sambanova:Meta-Llama-3.3-70B-Instruct": ModelEntry(
         "Llama 3.3 70B · SambaNova", _AGENTIC, 131_072
     ),
     "sambanova:DeepSeek-V3.1": ModelEntry(
         "DeepSeek V3.1 · SambaNova", _AGENTIC, 131_072
     ),
-    "sambanova:DeepSeek-V3.2": ModelEntry(
-        "DeepSeek V3.2 · SambaNova", _AGENTIC, 32_768
-    ),
-    "sambanova:MiniMax-M2.7": ModelEntry(
-        "MiniMax M2.7 · SambaNova", _AGENTIC, 196_608
-    ),
-    "sambanova:gemma-4-31B-it": ModelEntry(
-        "Gemma 4 31B · SambaNova", _AGENTIC, 131_072
-    ),
-    "sambanova:gpt-oss-120b": ModelEntry(
-        "GPT-OSS 120B · SambaNova", _AGENTIC, 131_072
+    "sambanova:MiniMax-M3.1-Flash": ModelEntry(
+        "MiniMax M3.1 Flash · SambaNova", _AGENTIC, 1_048_576
     ),
     # -- resellers (their model namespaces, verbatim) -----------------------------
     "together:thinkingmachines/Inkling": ModelEntry("Inkling · via Together"),
