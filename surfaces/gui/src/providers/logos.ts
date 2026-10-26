@@ -21,6 +21,7 @@ import orcarouter from "./logos/orcarouter.svg";
 import fireworks from "./logos/fireworks.svg";
 import together from "./logos/together.svg";
 import nvidia from "./logos/nvidia.svg";
+import sambanova from "./logos/sambanova.svg";
 import zai from "./logos/zai.svg";
 import kimi from "./logos/kimi.svg";
 import deepseek from "./logos/deepseek.svg";
@@ -54,6 +55,7 @@ export const PROVIDER_LOGOS: Record<string, string> = {
   together,
   nebius,
   nvidia,
+  sambanova,
   zai,
   kimi,
   deepseek,
@@ -90,6 +92,7 @@ export const PROVIDER_ORDER = [
   "requesty",
   "orcarouter",
   "nvidia",
+  "sambanova",
 ];
 
 export function providerRank(name: string): number {
