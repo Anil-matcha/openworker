@@ -226,15 +226,30 @@ def test_verify_ark_profile_endpoint_override(monkeypatch):
     assert cap["url"] == "https://gateway.example/ark/v3/responses"
 
 
-def test_verify_nvidia_custom_endpoint(monkeypatch):
-    """The descriptor's help text promises a self-hosted NIM container works — only true
-    if the override actually reaches the request."""
+def test_verify_nvidia_self_hosted_lists_models(monkeypatch):
+    """The descriptor's help text promises a self-hosted NIM container works. Such a
+    container serves one model of its own, so the hosted probe's recommended id would
+    404 there; with any endpoint other than the default, Test lists models instead
+    (behind the key on a self-hosted NIM) and never POSTs a completion."""
     cap: dict = {}
-    _patch_post_refusing_get(monkeypatch, status=200, capture=cap)
-    verify_provider_key(
+    _patch_get(monkeypatch, status=200, capture=cap)
+
+    def refuse_post(*_a, **_kw):
+        raise AssertionError("a self-hosted NIM is probed with GET /models, not a completion")
+
+    monkeypatch.setattr("httpx.post", refuse_post)
+    assert verify_provider_key(
         "nvidia", api_key="nvapi-x", base_url="http://localhost:8000/v1/"
-    )
-    assert cap["url"] == "http://localhost:8000/v1/chat/completions"
+    ) == {"ok": True}
+    assert cap["url"] == "http://localhost:8000/v1/models"
+    assert cap["headers"]["Authorization"] == "Bearer nvapi-x"
+
+
+def test_verify_nvidia_self_hosted_rejected_key_is_invalid(monkeypatch):
+    _patch_get(monkeypatch, status=401)
+    assert verify_provider_key(
+        "nvidia", api_key="nvapi-bad", base_url="http://nim.internal:8000/v1"
+    ) == {"ok": False, "error": "Invalid API key."}
 
 
 def test_verify_network_error_is_clean(monkeypatch):

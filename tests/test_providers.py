@@ -505,7 +505,7 @@ def test_matrix_answers_capabilities_for_reseller_ids():
         "orcarouter:anthropic/claude-sonnet-5",
         # NIM ids are `vendor/model`, so NVIDIA's own models repeat the word in the
         # routed id. Deliberate: the `z-ai/` and `deepseek-ai/` rows in matrix.py don't.
-        "nvidia:nvidia/llama-3.3-nemotron-super-49b-v1.5",
+        "nvidia:nvidia/nemotron-3-super-120b-a12b",
     ):
         caps = capabilities_for(mid)
         assert caps.tools and caps.parallel_tool_calls and caps.streaming
