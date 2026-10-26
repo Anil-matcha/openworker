@@ -11,6 +11,10 @@ when THIS classifier accepts it. The contract:
 - **Pipelines are allowed** (`nl … | sed -n … | grep …`) — every stage must classify.
   All other shell operators (;, &&, ||, &, redirections, substitutions) are rejected
   outright.
+- **Shell-aware** (OPE-232). The caller says which shell runs the command: `bash` (macOS,
+  Linux) or `powershell` (Windows). For PowerShell only a plain command with literal
+  arguments is eligible; anything that can evaluate code or expand values rejects.
+- **One line.** A command spanning lines is several commands: rejected.
 - **Fail closed.** Unknown commands, unparseable input, path-invoked binaries, and any
   doubtful flag reject. False negatives cost one manual approval; false positives cost
   an unreviewed side effect — the asymmetry decides every edge case here.
@@ -68,6 +72,18 @@ _FLAG_BAD: dict[str, tuple[str, ...]] = {
 }
 
 _ENV_ASSIGN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=[^;&|<>`]*$")
+# Environment prefixes that only change formatting (locale, time zone, colour, width).
+# Any other variable may name a program the command then runs, so it rejects.
+_SAFE_ENV = frozenset({
+    "LANG", "LANGUAGE", "LC_ALL", "LC_COLLATE", "LC_CTYPE", "LC_MESSAGES", "LC_NUMERIC",
+    "LC_TIME", "TZ", "NO_COLOR", "COLUMNS",
+})
+
+SHELLS = ("bash", "powershell")
+# PowerShell evaluates or expands these even inside what looks like an argument:
+# variables, sub-expressions and grouping, script blocks, array/hash literals, arrays of
+# arguments, escapes, call / redirection / sequence operators. Fail closed on any of them.
+_POWERSHELL_UNSAFE = frozenset("$`(){}[]@,;&<>")
 
 # A sed script token that invokes the `w`/`W` (write-file) command. Two spellings:
 #   * at the start of a script command, optionally after an address —
@@ -105,6 +121,8 @@ def _stages(command: str) -> list[list[str]] | None:
     """Tokenize with operators surfaced; split into pipeline stages. None = reject."""
     if not command or not command.strip():
         return None
+    if any(ord(c) < 32 and c != "\t" for c in command):
+        return None  # a line break starts another command; other controls are never needed
     # Shell variables are expanded after this check; single-quoted '$' is literal.
     if _has_unquoted_shell_variable(command) or "$(" in command or "`" in command or "<(" in command or ">(" in command:
         return None
@@ -194,9 +212,11 @@ def _flag_denied(token: str, denied: tuple[str, ...]) -> bool:
 
 
 def _stage_ok(argv: list[str]) -> bool:
-    # Leading VAR=value assignments (LC_ALL=C grep …) are inert — skip them.
+    # Leading VAR=value assignments (LC_ALL=C grep …): only formatting variables pass.
     i = 0
     while i < len(argv) and _ENV_ASSIGN.match(argv[i]):
+        if argv[i].split("=", 1)[0] not in _SAFE_ENV:
+            return False
         i += 1
     argv = argv[i:]
     if not argv:
@@ -254,11 +274,36 @@ def _stage_ok(argv: list[str]) -> bool:
     return False
 
 
-def is_readonly_command(command: str) -> bool:
-    """True iff `command` is a single command or pure pipeline of local read-only stages."""
-    stages = _stages(str(command or ""))
+def _powershell_plain(command: str) -> bool:
+    """A command PowerShell runs as written: no construct that evaluates or expands. (A
+    leading `.` or `&` that would run a script is rejected too: `&` here, and `.` because
+    it is not a read-only command.)"""
+    if any(c in _POWERSHELL_UNSAFE for c in command):
+        return False
+    return "--%" not in command.split()
+
+
+def _powershell_paths(command: str) -> str:
+    """PowerShell has no backslash escape: a backslash is a path separator. The tokenizer
+    below is bash-style, so hand it forward slashes, which PowerShell paths accept too."""
+    return command.replace(chr(92), "/")
+
+
+def is_readonly_command(command: str, shell: str = "bash") -> bool:
+    """True iff `command` is a single command or pure pipeline of local read-only stages,
+    as the given shell (`bash` or `powershell`) would run it."""
+    if shell not in SHELLS:
+        return False
+    command = str(command or "")
+    if shell == "powershell":
+        if not _powershell_plain(command):
+            return False
+        command = _powershell_paths(command)
+    stages = _stages(command)
     if stages is None:
         return False
+    if shell == "powershell" and any(_ENV_ASSIGN.match(s[0]) for s in stages):
+        return False  # not an assignment in PowerShell: it would be a command name
     return all(_stage_ok(s) for s in stages)
 
 
@@ -322,6 +367,30 @@ def _find_targets(args: list[str]) -> list[str]:
     return out
 
 
+def _flag_values(args: list[str]) -> list[str]:
+    """Paths a flag carries in the same token (OPE-232): `--file=PATH`, PowerShell's
+    `-Path:PATH`, and a short flag with a path attached (`-f/etc/hosts`). Named as read
+    targets so they are held to the folders like any operand. Values that are not paths
+    (`--format=%H`) resolve inside the folder and cost nothing."""
+    out: list[str] = []
+    for tok in args:
+        if not tok.startswith("-") or tok in {"-", "--"}:
+            continue
+        if "=" in tok:
+            value = tok.split("=", 1)[1]
+        elif ":" in tok:
+            value = tok.split(":", 1)[1]
+        elif not tok.startswith("--") and len(tok) > 2 and (
+            "/" in tok[2:] or "\\" in tok[2:] or tok[2:].startswith(("~", "."))
+        ):
+            value = tok[2:]
+        else:
+            continue
+        if value and not _NUMERIC.match(value):
+            out.append(value)
+    return out
+
+
 def _stage_targets(argv: list[str]) -> list[str]:
     """File operands of one accepted pipeline stage."""
     i = 0
@@ -337,7 +406,7 @@ def _stage_targets(argv: list[str]) -> list[str]:
     if head == "git":
         # Only `-C <dir>` escapes the working directory; everything else the classifier
         # accepts reads the repo already in scope. Operands after `--` are pathspecs.
-        out: list[str] = []
+        out: list[str] = _flag_values(args)
         for j, tok in enumerate(args):
             if tok == "-C" and j + 1 < len(args):
                 out.append(args[j + 1])
@@ -347,9 +416,9 @@ def _stage_targets(argv: list[str]) -> list[str]:
         return out
 
     if head == "find":
-        return _find_targets(args)
+        return _find_targets(args) + _flag_values(args)
 
-    out = []
+    out = _flag_values(args)
     skip_next = False
     seen_operand = False
     for tok in args:
@@ -376,7 +445,7 @@ def _stage_targets(argv: list[str]) -> list[str]:
     return out
 
 
-def read_targets(command: str) -> list[str]:
+def read_targets(command: str, shell: str = "bash") -> list[str]:
     """Every file operand `command` would read, for scoping against the session's roots.
 
     Only meaningful for commands `is_readonly_command` accepts — it assumes that vetting.
@@ -386,7 +455,12 @@ def read_targets(command: str) -> list[str]:
     Known limit: a path reached through a flag this table does not list is not returned.
     The positional operands that carry the real exposure are covered.
     """
-    stages = _stages(str(command or ""))
+    if shell not in SHELLS:
+        return []
+    command = str(command or "")
+    if shell == "powershell":
+        command = _powershell_paths(command)
+    stages = _stages(command)
     if stages is None:
         return []
     return [t for stage in stages for t in _stage_targets(stage)]
