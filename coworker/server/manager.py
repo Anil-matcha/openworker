@@ -4424,7 +4424,7 @@ class SessionManager:
         fresh-sandbox gpt-5.6-sol case; owner-hit on a sandbox 2026-09-02).
         A default that already works is never stolen. Returns the model
         adopted, if any."""
-        d = get_descriptor(name)
+        d = get_descriptor(name, self.secrets)
         if d is None:
             return None
         self._refresh_provider(name)
@@ -4704,7 +4704,60 @@ class SessionManager:
             profile = self.secrets.get(f"provider:{name}") or {}
             rows = local_server.model_facts(name, profile.get("base_url"), profile.get("api_key"), fresh=True)
             return {"provider": name, "models": rows, "alive": self._local_server_alive(name)}
+        if is_custom_provider(name, self.secrets):
+            return self._custom_provider_models(name)
         return {"provider": name, "models": [], "error": "no local model list for this provider"}
+
+    def _custom_provider_models(self, name: str) -> dict[str, Any]:
+        """The ids a user-added OpenAI-compatible provider lists at GET /models, as rows the
+        settings page can tick ("Fetch from server"). A server without /models is not a
+        broken provider — Chat Completions does not require the listing — so that case
+        comes back as a note, and the user types the ids instead."""
+        import httpx
+
+        profile = self.secrets.get(f"provider:{name}") or {}
+        base = str(profile.get("base_url") or "").strip().rstrip("/")
+        key = str(profile.get("api_key") or "").strip()
+        if not base:
+            return {"provider": name, "models": [], "error": "No endpoint saved for this provider."}
+        try:
+            resp = httpx.get(
+                base + "/models",
+                headers={"Authorization": f"Bearer {key}"} if key else {},
+                timeout=8.0,
+            )
+        except Exception as exc:  # noqa: BLE001 - a listing never raises into the route
+            return {
+                "provider": name,
+                "models": [],
+                "alive": False,
+                "error": f"Could not reach {base}: {exc.__class__.__name__}.",
+            }
+        if resp.status_code in (404, 405):
+            return {
+                "provider": name,
+                "models": [],
+                "alive": True,
+                "error": "This server does not list its models (no /models). Type the model ids by hand.",
+            }
+        if resp.status_code >= 300:
+            return {"provider": name, "models": [], "alive": True, "error": f"HTTP {resp.status_code} from {base}/models."}
+        try:
+            data = resp.json()
+        except ValueError:
+            return {"provider": name, "models": [], "alive": True, "error": f"{base}/models did not answer with JSON."}
+        items = data.get("data") if isinstance(data, dict) else data
+        ids = [str(it["id"]) for it in items if isinstance(it, dict) and it.get("id")] if isinstance(items, list) else []
+        rows = [
+            {
+                "model": f"{name}:{mid}", "name": mid, "size_bytes": None, "tools": None,
+                "thinking": None, "vision": None, "remote": True, "parameter_size": None,
+                "quantization": None, "context_max": None, "context": None,
+                "context_from": "server", "fit": "cloud", "recommendation": None,
+            }
+            for mid in ids
+        ]
+        return {"provider": name, "models": rows, "alive": True}
 
     def _local_server_alive(self, name: str) -> bool:
         """Best-effort liveness of an OpenAI-compatible local server (local_server.LOCAL_SERVERS), cached 30 s like Ollama's."""

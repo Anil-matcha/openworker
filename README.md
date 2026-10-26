@@ -91,7 +91,7 @@ Model access is yours: pick a provider, paste your key, switch anytime. Supporte
 
 A curated model list marks what we've verified for tool-calling work. Adding any model string works at your own risk.
 
-Need another Chat Completions gateway? In **Settings → Models**, choose **Custom provider** and enter its endpoint, Bearer API key, and a short route prefix. Add the gateway's model IDs manually; for example, an OpenRouter route named `openrouter` uses `openrouter:anthropic/claude-…`. This supports standard OpenAI-compatible APIs without OpenWorker maintaining their full catalog.
+Another OpenAI-compatible server — a gateway, a proxy, a vendor not listed? In **Settings ▸ Models & Keys**, the **Add an OpenAI-compatible provider** box at the end of the API-keys group takes a name, its endpoint and key; it becomes its own card, and its models are selected as `<prefix>:<model-id>` (the prefix is derived from the name). Type the model ids, or fetch them from the server when it lists them.
 
 ## Privacy
 

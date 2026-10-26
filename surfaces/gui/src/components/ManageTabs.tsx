@@ -7,6 +7,7 @@ import {
   connectManaged,
   connectMcpBacked,
   createCustomProvider,
+  getLocalModels,
   disallowUser,
   getSettings,
   getSubscriptions,
@@ -102,6 +103,11 @@ export function ModelsTab() {
   const [settingsError, setSettingsError] = useState(false);
   const [addingCustom, setAddingCustom] = useState(false);
   const [openCustom, setOpenCustom] = useState<string | null>(null);
+  // A custom provider's "Fetch from server": the ids its GET /models listed (offered as
+  // suggestions in the checklist) and the one-line outcome.
+  const [fetched, setFetched] = useState<string[]>([]);
+  const [fetching, setFetching] = useState(false);
+  const [fetchNote, setFetchNote] = useState<string | null>(null);
   const refreshSettings = () => {
     setSettingsError(false);
     getSettings()
@@ -129,6 +135,26 @@ export function ModelsTab() {
       ps.openProvider(openCustom);
     }
   }, [openCustom, ps.providers]);
+
+  useEffect(() => {
+    setFetched([]);
+    setFetchNote(null);
+  }, [ps.sel]);
+
+  const fetchModels = async () => {
+    if (!ps.sel) return;
+    setFetching(true);
+    setFetchNote(null);
+    try {
+      const res = await getLocalModels(ps.sel);
+      const ids = res.models.map((m) => m.name);
+      setFetched(ids);
+      setFetchNote(res.error || (ids.length ? t("manage.custom_fetched_count", { count: ids.length }) : t("manage.custom_fetched_none")));
+    } catch {
+      setFetchNote(t("manage.local_models_failed"));
+    }
+    setFetching(false);
+  };
 
   // #43: a failed or hung settings fetch says so and offers Retry (same shape as the
   // local-models status line below) instead of sitting on "Loading…" forever.
@@ -219,12 +245,20 @@ export function ModelsTab() {
         <div className="mt-6">
           <div className={SEC_H + " mb-1.5"}>{t("manage.models")}</div>
           <p className="text-meta text-muted mb-2.5 leading-relaxed">
-            {t("manage.models_help")}
+            {t(info?.is_custom ? "manage.custom_models_help" : "manage.models_help")}
           </p>
+          {info?.is_custom && (
+            <div className="flex items-center gap-3 mb-2.5" data-testid="custom-fetch-row">
+              <button className={BTN_BORDERED} data-testid="custom-fetch-models" disabled={fetching} onClick={() => void fetchModels()}>
+                {fetching ? t("manage.custom_fetching") : t("manage.custom_fetch_models")}
+              </button>
+              {fetchNote && <span className="text-meta text-muted" data-testid="custom-fetch-note">{fetchNote}</span>}
+            </div>
+          )}
           <ModelChecklist
             provider={ps.sel}
             knownProviders={knownNames}
-            suggested={info?.suggested_models || []}
+            suggested={[...(info?.suggested_models || []), ...fetched].filter((m, i, a) => a.indexOf(m) === i)}
             curated={settings.models}
             defaultModel={settings.model}
             labels={settings.model_labels}
@@ -261,8 +295,22 @@ export function ModelsTab() {
   );
 }
 
-/** First-run form for a generic OpenAI-compatible provider. It intentionally does
- * not fetch a model catalog: users add the exact model ids their gateway exposes. */
+/** A route prefix from a display name: lowercase, dashes between words, starting with a
+ * letter, at most 32 characters — the slug the backend accepts for `<prefix>:<model-id>`. */
+export function routePrefixFor(title: string): string {
+  return title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .replace(/^[^a-z]+/, "")
+    .slice(0, 32)
+    .replace(/-+$/, "");
+}
+
+/** The form behind the "Add an OpenAI-compatible provider" box: a name of the user's
+ * choosing (the new card's title), the route prefix derived from it (editable until the
+ * first save), the endpoint and the key. Saving creates the card and opens it, where the
+ * model ids are typed or fetched from the server. */
 function CustomProviderForm({
   onCancel,
   onCreated,
@@ -270,49 +318,97 @@ function CustomProviderForm({
   onCancel: () => void;
   onCreated: (name: string) => Promise<void>;
 }) {
+  const { t } = useTranslation();
   const [title, setTitle] = useState("");
   const [name, setName] = useState("");
+  const [nameTouched, setNameTouched] = useState(false);
   const [baseUrl, setBaseUrl] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const input = "w-full px-3 py-2 rounded-lg border border-line bg-panel text-[13.5px] outline-none focus:border-accent";
+  const input = "w-full px-3 py-2 rounded-lg border border-line bg-panel text-ui outline-none focus:border-accent";
+  const label = "block text-meta text-muted mt-3 mb-1";
+  const prefix = name || routePrefixFor(title);
 
   const save = async () => {
     setSaving(true);
     setError(null);
     const result: { ok: boolean; error?: string; provider?: string } = await createCustomProvider(
-      name,
+      prefix,
       title,
       { base_url: baseUrl, api_key: apiKey },
-    ).catch(() => ({ ok: false, error: "unreachable" }));
+    ).catch(() => ({ ok: false, error: t("provider.err_unreachable") }));
     setSaving(false);
     if (!result.ok || !result.provider) {
-      setError(result.error || "Couldn’t add provider.");
+      setError(result.error || t("manage.custom_add_failed"));
       return;
     }
     await onCreated(result.provider);
   };
 
   return (
-    <div className={CARD + " p-4 max-w-xl"} data-testid="set-custom-provider-form">
-      <div className="text-[15px] font-semibold">Add OpenAI-compatible provider</div>
-      <p className="text-[12px] text-muted mt-1 leading-relaxed">
-        This provider uses Chat Completions with Bearer authentication. Use HTTPS unless the gateway is local; you’ll add its model IDs manually next.
-      </p>
-      <label className="block text-[12px] text-muted mt-3 mb-1" htmlFor="custom-provider-title">Provider name</label>
-      <input id="custom-provider-title" className={input} value={title} placeholder="OpenRouter" onChange={(e) => setTitle(e.target.value)} />
-      <label className="block text-[12px] text-muted mt-3 mb-1" htmlFor="custom-provider-route">Route prefix</label>
-      <input id="custom-provider-route" className={input} value={name} placeholder="openrouter" spellCheck={false} autoCapitalize="none" onChange={(e) => setName(e.target.value.toLowerCase())} />
-      <p className="text-[11.5px] text-faint mt-1">Models will be selected as <code>openrouter:model-id</code>.</p>
-      <label className="block text-[12px] text-muted mt-3 mb-1" htmlFor="custom-provider-endpoint">Endpoint</label>
-      <input id="custom-provider-endpoint" className={input} value={baseUrl} placeholder="https://…/v1" spellCheck={false} autoCapitalize="none" onChange={(e) => setBaseUrl(e.target.value)} />
-      <label className="block text-[12px] text-muted mt-3 mb-1" htmlFor="custom-provider-key">API key</label>
-      <input id="custom-provider-key" className={input} type="password" value={apiKey} placeholder="…" autoComplete="off" onChange={(e) => setApiKey(e.target.value)} />
-      {error && <div className="text-[12.5px] text-warnInk mt-3">{error}</div>}
-      <div className="flex gap-2 mt-4">
-        <button className={BTN_ACCENT} disabled={saving} onClick={() => void save()}>{saving ? "Adding…" : "Add provider"}</button>
-        <button className={BTN_BORDERED} onClick={onCancel}>Cancel</button>
+    <div className={CARD + " p-4 max-w-xl mb-6"} data-testid="set-custom-provider-form">
+      <div className="text-body font-semibold">{t("manage.custom_add_title")}</div>
+      <p className="text-meta text-muted mt-1 leading-relaxed">{t("manage.custom_add_desc")}</p>
+      <label className={label} htmlFor="custom-provider-title">{t("manage.custom_name_label")}</label>
+      <input
+        id="custom-provider-title"
+        className={input}
+        value={title}
+        placeholder={t("manage.custom_name_placeholder")}
+        data-testid="custom-provider-title"
+        onChange={(e) => {
+          setTitle(e.target.value);
+          if (!nameTouched) setName(routePrefixFor(e.target.value));
+        }}
+      />
+      <label className={label} htmlFor="custom-provider-route">{t("manage.custom_route_label")}</label>
+      <input
+        id="custom-provider-route"
+        className={input + " font-mono"}
+        value={prefix}
+        spellCheck={false}
+        autoCapitalize="none"
+        data-testid="custom-provider-route"
+        onChange={(e) => {
+          setNameTouched(true);
+          setName(e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, ""));
+        }}
+      />
+      <p className="text-meta text-faint mt-1">{t("manage.custom_route_hint", { prefix: prefix || "acme" })}</p>
+      <label className={label} htmlFor="custom-provider-endpoint">{t("manage.custom_endpoint_label")}</label>
+      <input
+        id="custom-provider-endpoint"
+        className={input}
+        value={baseUrl}
+        placeholder="https://…/v1"
+        spellCheck={false}
+        autoCapitalize="none"
+        data-testid="custom-provider-endpoint"
+        onChange={(e) => setBaseUrl(e.target.value)}
+      />
+      <p className="text-meta text-faint mt-1">{t("manage.custom_endpoint_help")}</p>
+      <label className={label} htmlFor="custom-provider-key">{t("manage.custom_key_label")}</label>
+      <input
+        id="custom-provider-key"
+        className={input}
+        type="password"
+        value={apiKey}
+        autoComplete="off"
+        data-testid="custom-provider-key"
+        onChange={(e) => setApiKey(e.target.value)}
+      />
+      <div className="mt-3 min-h-[19px] text-ui">{error && <span className="text-warnInk" data-testid="custom-provider-error">{error}</span>}</div>
+      <div className="flex gap-2 mt-1">
+        <button
+          className={BTN_ACCENT}
+          disabled={saving || !title.trim() || !prefix || !baseUrl.trim() || !apiKey.trim()}
+          data-testid="custom-provider-add"
+          onClick={() => void save()}
+        >
+          {saving ? t("manage.custom_adding") : t("manage.custom_add_btn")}
+        </button>
+        <button className={BTN_BORDERED} onClick={onCancel} data-testid="custom-provider-cancel">{t("manage.custom_cancel")}</button>
       </div>
     </div>
   );

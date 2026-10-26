@@ -44,7 +44,7 @@ export function ProviderGroups({
   ps: ProviderSetupState;
   tp: string;
   models: string[]; // the picker's models, for the count on each card
-  onAddCustom?: () => void; // Settings: the "Custom provider" card at the end of the API-keys group
+  onAddCustom?: () => void; // Settings: the permanent "Add an OpenAI-compatible provider" box, last in the API-keys group
 }) {
   const { t } = useTranslation();
   const [query, setQuery] = useState("");
@@ -112,7 +112,9 @@ export function ProviderGroups({
             {/* A long group (API keys) shows two rows, then a "Show N more" line expands it in place. */}
             <div className="grid grid-cols-2 xl:grid-cols-3 gap-3" data-testid={`provider-grid-${kind}`}>
               {(expanded.has(kind) || q ? cards : cards.slice(0, FOLD)).map(cardFor)}
-              {kind === "api_key" && onAddCustom && (expanded.has(kind) || q || cards.length <= FOLD) && (
+              {/* The add box stays whatever the fold or the search shows: saving it makes a
+                  new card named by the user, and the box remains for the next one. */}
+              {kind === "api_key" && onAddCustom && (
                 <button
                   className={card + " border-dashed bg-transparent text-muted hover:text-ink"}
                   data-testid={`${tp}-provider-custom-add`}
