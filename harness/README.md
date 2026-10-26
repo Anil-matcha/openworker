@@ -23,6 +23,9 @@ its Python harness; this directory is additive.
   isolated previews, approval-based publishing and revision recovery.
 - **[Server getting started](../docs/harness/DEVELOPER-GETTING-STARTED.md)** —
   REST/SSE, PostgreSQL, workers and deployment references.
+- **[Coding tools and unattended sessions](../docs/harness/CODING-TOOLS.md)** —
+  file editing/search, managed preview processes and auto-skip questions.
+- **[Python/Rust tool survey](../docs/harness/TOOL-PARITY.md)** — remaining parity gaps.
 
 ## What the harness handles
 

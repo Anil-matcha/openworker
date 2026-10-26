@@ -62,7 +62,8 @@ jobs:
         run: |
           rustup show active-toolchain
           cargo test --locked -p openworker-sdk --features test-support --lib --test desktop_api -- --test-threads=1
-          cargo test --locked -p openworker-runtime --test connections --test model_endpoints --test direct_macos
+          cargo test --locked -p openworker-runtime --test connections --test model_endpoints --test direct_macos --test coding
+          cargo test --locked -p openworker-sdk --features test-support --test coding -- --test-threads=1
           npm --prefix typescript-sdk ci
           npm --prefix typescript-sdk test
           if [ "$RUNNER_OS" = Windows ]; then
@@ -71,6 +72,7 @@ jobs:
             export OW_TS_TEST_HOST="$PWD/target/debug/sdk-test-host"
           fi
           node --test typescript-sdk/test/desktop-api.test.mjs
+          node --test typescript-sdk/test/coding.test.mjs
           node --test desktop-starters/test.mjs
           node --test tests/stdio-client.test.mjs tests/release-layout.test.mjs
 
@@ -136,6 +138,7 @@ jobs:
           OW_TS_TEST_HOST="$PWD/target/release/sdk-test-host" npm --prefix typescript-sdk run test:integration
           OW_TS_TEST_HOST="$PWD/target/release/sdk-test-host" npm --prefix typescript-sdk run test:dynamic-agents
           OW_TS_TEST_HOST="$PWD/target/release/sdk-test-host" node --test typescript-sdk/test/desktop-api.test.mjs
+          OW_TS_TEST_HOST="$PWD/target/release/sdk-test-host" node --test typescript-sdk/test/coding.test.mjs
           node --test desktop-starters/test.mjs
           (cd typescript-sdk && npm pack --dry-run)
           node --test partner/build-sdk.test.mjs

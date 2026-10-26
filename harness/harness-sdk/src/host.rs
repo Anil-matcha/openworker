@@ -195,6 +195,9 @@ impl HostConfig {
 impl Host {
     pub fn open(config: &HostConfig, mut registry: ToolRegistry) -> Result<Arc<Self>> {
         config.validate()?;
+        // Selection remains per-agent. The implementation always runs in the
+        // session's execution backend, never as an SDK-host callback.
+        openworker_runtime::coding::register(&mut registry)?;
         openworker_runtime::platform::private_directory(&config.state_dir)?;
         // Own the directory before compiling or replacing any generated bundle.
         let session_dir = config
@@ -678,6 +681,9 @@ impl Host {
                 c.insert("agent_runs".into(), json!(true));
                 c.insert("dynamic_agents".into(), json!(true));
                 c.insert("session_model_override".into(), json!(true));
+                c.insert("sdk_question_policy".into(), json!(true));
+                c.insert("coding_tools".into(), json!(true));
+                c.insert("coding_processes".into(), json!(cfg!(target_os = "linux")));
                 c.insert("model_providers".into(), json!(true));
                 c.insert("provider_probe".into(), json!(true));
                 c.insert("session_send".into(), json!(true));

@@ -8,6 +8,9 @@ dependency. Python/Desktop remains separate.
 
 ## Desktop QuickStart
 
+For server/container coding agents, see [coding tools and unattended sessions](../../docs/harness/CODING-TOOLS.md).
+`autoSkipQuestions` is independent of `approvals`; select `coding.*` tools explicitly.
+
 The [desktop starters](../desktop-starters/README.md) bundle the runtime and wire
 model settings, chat, approvals and an isolated playable preview. Application code
 runs in Electron's trusted main process, not the renderer.

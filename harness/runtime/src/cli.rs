@@ -132,6 +132,12 @@ enum Command {
         #[arg(long, default_value = "example")]
         label: String,
     },
+    /// First-party coding/process tools in the selected execution environment.
+    #[command(hide = true)]
+    McpCoding {
+        #[arg(long)]
+        workspace: PathBuf,
+    },
     /// Internal direct-tool lifecycle supervisor; never exposed as a model tool.
     #[command(hide = true)]
     DirectSupervisor {
@@ -256,6 +262,7 @@ async fn entry(args: Args, registry: openworker_tools::ToolRegistry) -> Result<(
                 )?
             );
         }
+        Command::McpCoding { workspace } => crate::coding::serve(&workspace).await?,
         Command::McpExample { workspace, label } => {
             crate::runner::serve_labeled(&workspace, &label).await?
         }

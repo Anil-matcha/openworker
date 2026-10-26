@@ -82,6 +82,8 @@ export interface Agent {
   fallbackModel?: string;
   planning?: boolean;
   approvals?: Approvals;
+  /** Skip structured ask_user calls without changing tool approvals. */
+  autoSkipQuestions?: boolean;
   subagents?: Agent[];
   servers?: string;
   toolPolicy?: string;
@@ -97,6 +99,8 @@ export interface Model {
   name: string;
 }
 export interface SessionOptions {
+  /** Overrides the agent default for this new session. */
+  autoSkipQuestions?: boolean;
   workspace?: string;
   scratch?: boolean;
   name?: string;

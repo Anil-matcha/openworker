@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Protocol fault fixture only; no agent engine lives in this package.
 import { createInterface } from "node:readline";
+import { spawn } from "node:child_process";
 import { readFileSync, appendFileSync } from "node:fs";
 const config = JSON.parse(readFileSync(process.argv[3].slice(1), "utf8"));
 const reply = (id, result) =>
@@ -40,6 +41,11 @@ for await (const line of lines) {
     });
   else if (method === "crash") {
     appendFileSync(params.marker, "called\n");
+    process.exit(1);
+  } else if (method === "crash_with_inherited_pipes") {
+    const holder=spawn(process.execPath,["-e","setTimeout(()=>{},10000)"],{stdio:["ignore",1,2]});
+    appendFileSync(params.marker,String(holder.pid));
+    holder.unref();
     process.exit(1);
   } else if (method === "malformed") process.stdout.write("invalid\n");
   else if (method === "huge") process.stdout.write("x".repeat(1024 * 1024 + 1));

@@ -455,6 +455,8 @@ export class Harness {
     return result.agents.map((a) => String(record(a).id));
   }
   async session(agent: string, options: SessionOptions = {}): Promise<Session> {
+    if (options.autoSkipQuestions !== undefined && this.capabilities.sdk_question_policy !== true)
+      throw new HarnessError("Setup", "Update the host to configure SDK question policy");
     if (options.workspace !== undefined && !isAbsolute(options.workspace))
       throw new HarnessError(
         "InvalidInput",
@@ -465,6 +467,7 @@ export class Harness {
         agent,
         workspace: options.workspace,
         scratch: options.scratch,
+        auto_skip_questions: options.autoSkipQuestions,
         name: options.name,
         ...(options.model
           ? {

@@ -151,6 +151,7 @@ export function agentWire(a: Agent, depth = 0): object {
     provider: a.provider,
     fallback_model: a.fallbackModel,
     planning: a.planning,
+    auto_skip_questions: a.autoSkipQuestions,
     approvals:
       a.approvals?.mode === "auto"
         ? {

@@ -1,0 +1,257 @@
+use anyhow::{bail, ensure, Context, Result};
+use serde_json::{json, Value};
+use std::{
+    io::Write,
+    path::{Path, PathBuf},
+};
+const MAX_FILE: u64 = 1024 * 1024;
+const LOCK: &str = ".openworker-coding.lock";
+fn edit_lock(root: &Path) -> Result<std::fs::File> {
+    let path = crate::runner::path(root, LOCK)?;
+    if let Ok(meta) = path.symlink_metadata() {
+        ensure!(
+            meta.is_file() && !crate::platform::linked(&meta),
+            "Regular lock file required"
+        );
+    }
+    let mut options = std::fs::OpenOptions::new();
+    options.read(true).write(true).create(true).truncate(false);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options
+            .mode(0o600)
+            .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK);
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        options.custom_flags(windows_sys::Win32::Storage::FileSystem::FILE_FLAG_OPEN_REPARSE_POINT);
+    }
+    let file = options.open(path)?;
+    let meta = file.metadata()?;
+    ensure!(
+        meta.is_file() && !crate::platform::linked(&meta),
+        "Regular lock file required"
+    );
+    fs2::FileExt::try_lock_exclusive(&file)
+        .context("Another coding edit is in progress; retry after reading the file")?;
+    Ok(file)
+}
+fn text(path: &Path) -> Result<String> {
+    String::from_utf8(crate::bundle::read_limited(path, MAX_FILE as usize)?)
+        .context("UTF-8 file required (maximum 1 MiB)")
+}
+fn bounded(v: &Value, key: &str, max: usize) -> Result<String> {
+    Ok(crate::runner::bounded_text(v, key, max)?.to_owned())
+}
+fn hash(s: &str) -> String {
+    crate::bundle::digest(s.as_bytes())
+}
+fn expected(args: &Value, current: &str) -> Result<()> {
+    if let Some(value) = args.get("expected_sha256") {
+        ensure!(
+            value == &hash(current),
+            "File changed; read it again before editing"
+        );
+    }
+    Ok(())
+}
+fn write(root: &Path, relative: &str, content: &str, create_only: bool) -> Result<()> {
+    ensure!(content.len() <= MAX_FILE as usize, "File exceeds 1 MiB");
+    let target = crate::runner::path(root, relative)?;
+    let parent = target.parent().context("Parent required")?;
+    std::fs::create_dir_all(parent)?;
+    crate::runner::path(root, relative)?;
+    let temp = parent.join(format!(".ow-edit-{}", uuid::Uuid::new_v4()));
+    let result = (|| -> Result<()> {
+        let mut opts = std::fs::OpenOptions::new();
+        opts.write(true).create_new(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            opts.mode(0o600);
+        }
+        let mut file = opts.open(&temp)?;
+        // Preserve executable bits on existing source/scripts.
+        if !create_only {
+            if let Ok(meta) = std::fs::metadata(&target) {
+                file.set_permissions(meta.permissions())?;
+            }
+        }
+        file.write_all(content.as_bytes())?;
+        file.sync_all()?;
+        drop(file);
+        crate::runner::path(root, relative)?;
+        if create_only {
+            std::fs::hard_link(&temp, &target)?;
+        } else {
+            std::fs::rename(&temp, &target)?;
+        }
+        Ok(())
+    })();
+    let _ = std::fs::remove_file(temp);
+    result
+}
+fn files(root: &Path, args: &Value) -> Result<(Vec<PathBuf>, bool)> {
+    let relative = args["path"].as_str().unwrap_or(".");
+    let start = if relative == "." {
+        root.to_owned()
+    } else {
+        crate::runner::path(root, relative)?
+    };
+    ensure!(start.is_dir(), "Directory required");
+    let hidden = args["include_hidden"] == true;
+    let mut stack = vec![(start, 0)];
+    let mut out = vec![];
+    let mut scanned = 0;
+    let mut truncated = false;
+    while let Some((dir, depth)) = stack.pop() {
+        // Bound enumeration itself, not only the returned result.
+        let mut entries = vec![];
+        for entry in std::fs::read_dir(dir)? {
+            scanned += 1;
+            if scanned > 10000 {
+                truncated = true;
+                break;
+            }
+            entries.push(entry?);
+        }
+        entries.sort_by_key(|e| e.file_name());
+        for e in entries {
+            let name = e.file_name();
+            let name = name.to_string_lossy();
+            if (!hidden && name.starts_with('.'))
+                || matches!(name.as_ref(), ".git" | "node_modules" | "target")
+            {
+                continue;
+            }
+            let meta = e.file_type()?;
+            if meta.is_symlink() || crate::platform::linked(&e.metadata()?) {
+                continue;
+            }
+            if meta.is_dir() {
+                if depth < 16 {
+                    stack.push((e.path(), depth + 1));
+                } else {
+                    truncated = true;
+                }
+            } else if meta.is_file() {
+                out.push(e.path());
+            }
+        }
+        if scanned > 10000 {
+            break;
+        }
+    }
+    out.sort();
+    Ok((out, truncated))
+}
+pub fn call(root: &Path, name: &str, args: &Value) -> Result<Value> {
+    match name {
+        "read_file" => {
+            let p = crate::runner::path(root, args["path"].as_str().context("Path required")?)?;
+            let content = text(&p)?;
+            let offset = args["offset"].as_u64().unwrap_or(0).min(usize::MAX as u64) as usize;
+            let limit = args["limit"].as_u64().unwrap_or(200) as usize;
+            let all: Vec<_> = content.lines().collect();
+            let mut lines = vec![];
+            let mut bytes = 0;
+            let mut clipped = false;
+            for line in all.iter().skip(offset).take(limit) {
+                let part: String = line.chars().take(4000).collect();
+                let size = serde_json::to_string(&part)?.len();
+                if bytes + size > 24000 {
+                    break;
+                }
+                clipped |= part.len() < line.len();
+                bytes += size;
+                lines.push(part);
+            }
+            Ok(
+                json!({"path":args["path"],"sha256":hash(&content),"offset":offset,"lines":lines,"total_lines":all.len(),"long_lines_truncated":clipped,"truncated":offset.saturating_add(lines.len()) < all.len()}),
+            )
+        }
+        "write_file" | "edit_file" => {
+            let relative = args["path"].as_str().context("Path required")?;
+            ensure!(relative != LOCK, "Reserved coding lock file");
+            let _lock = edit_lock(root)?;
+            let p = crate::runner::path(root, relative)?;
+            let content = if name == "edit_file" {
+                let current = text(&p)?;
+                expected(args, &current)?;
+                let old = bounded(args, "old_text", MAX_FILE as usize)?;
+                ensure!(
+                    !old.is_empty() && current.matches(&old).count() == 1,
+                    "old_text must match exactly once"
+                );
+                current.replacen(&old, &bounded(args, "new_text", MAX_FILE as usize)?, 1)
+            } else {
+                if args.get("expected_sha256").is_some() {
+                    expected(args, &text(&p)?)?;
+                }
+                bounded(args, "content", MAX_FILE as usize)?
+            };
+            write(root, relative, &content, args["create_only"] == true)?;
+            Ok(
+                json!({"path":relative,"bytes":content.len(),"sha256":hash(&content),"written":true}),
+            )
+        }
+        "list_files" | "search_files" => {
+            let (paths, mut truncated) = files(root, args)?;
+            let limit = args["limit"].as_u64().unwrap_or(200) as usize;
+            if name == "list_files" {
+                truncated |= paths.len() > limit;
+                let files: Vec<_> = paths
+                    .iter()
+                    .take(limit)
+                    .map(|p| p.strip_prefix(root).unwrap().to_string_lossy().into_owned())
+                    .collect();
+                let mut files = files;
+                while serde_json::to_vec(&files)?.len() > 24000 {
+                    files.pop();
+                    truncated = true;
+                }
+                return Ok(json!({"files":files,"truncated":truncated}));
+            }
+            let query = bounded(args, "query", 1000)?;
+            ensure!(!query.is_empty(), "Nonempty query required");
+            let mut matches = vec![];
+            let mut read = 0;
+            let mut skipped = 0;
+            'scan: for p in paths {
+                if read >= 16 * MAX_FILE {
+                    truncated = true;
+                    break;
+                }
+                let rel = p.strip_prefix(root)?;
+                crate::runner::path(root, rel.to_str().context("UTF-8 path required")?)?;
+                let Ok(content) = text(&p) else {
+                    skipped += 1;
+                    continue;
+                };
+                read += content.len() as u64;
+                if content.contains('\0') {
+                    skipped += 1;
+                    continue;
+                }
+                for (i, line) in content.lines().enumerate() {
+                    if line.contains(&query) {
+                        if matches.len() >= limit || matches.len() >= 100 {
+                            truncated = true;
+                            break 'scan;
+                        }
+                        matches.push(json!({"path":rel,"line":i+1,"text":line.chars().take(240).collect::<String>()}));
+                        if serde_json::to_vec(&matches)?.len() > 48000 {
+                            matches.pop();
+                            truncated = true;
+                            break 'scan;
+                        }
+                    }
+                }
+            }
+            Ok(json!({"matches":matches,"truncated":truncated,"skipped_files":skipped}))
+        }
+        _ => bail!("Unknown file tool"),
+    }
+}

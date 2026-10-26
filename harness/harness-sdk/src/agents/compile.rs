@@ -15,6 +15,8 @@ pub(crate) struct AgentProfile {
     pub name: String,
     pub description: String,
     pub approvals: Approvals,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub auto_skip_questions: bool,
     pub subagents: Vec<String>,
     /// Defined only as a subagent: sessions come from its lead.
     pub worker_only: bool,
@@ -27,6 +29,7 @@ impl AgentProfile {
             name: name.into(),
             description: String::new(),
             approvals: Approvals::Always,
+            auto_skip_questions: false,
             subagents: vec![],
             worker_only: false,
         }
@@ -99,6 +102,7 @@ pub(crate) fn compile(
                 name: agent.display_name().to_owned(),
                 description: agent.description.clone(),
                 approvals: agent.approvals.clone(),
+                auto_skip_questions: agent.auto_skip_questions,
                 subagents: agent.subagents.iter().map(|s| s.id.clone()).collect(),
                 worker_only: *role == Some(Role::Worker),
             },

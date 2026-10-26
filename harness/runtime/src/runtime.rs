@@ -1168,10 +1168,13 @@ impl Runtime {
                         },
                     }
                 };
-                // Unsandboxed tool servers are not kept alive while parked, between
-                // turns, or after a failure. Cleanup must finish before the job ends.
+                // Only the selected first-party coding process manager may outlive
+                // a successful turn. Errors/cancellation still revoke everything.
                 if rt.bounded_lifecycle(&sid) {
-                    if let Err(e) = rt.remove_sandbox(&sid).await {
+                    if let Err(e) = rt
+                        .cleanup_execution(&sid, result.is_ok() && !token.is_cancelled())
+                        .await
+                    {
                         result = Err(e);
                     }
                 }
@@ -2000,7 +2003,7 @@ impl Runtime {
             )?;
             if finished {
                 if self.bounded_lifecycle(sid) {
-                    self.remove_sandbox(sid).await?;
+                    self.cleanup_execution(sid, true).await?;
                 }
                 self.update(sid, "turn_completed", json!({"status":"completed"}), |s| {
                     s.turn.as_mut().unwrap().status = "completed".into();
@@ -2394,10 +2397,51 @@ impl Runtime {
         Ok(json!({"interaction_id":iid,"duplicate":false}))
     }
     async fn remove_sandbox(&self, sid: &str) -> Result<()> {
+        self.cleanup_execution(sid, false).await
+    }
+    async fn cleanup_execution(&self, sid: &str, allow_coding: bool) -> Result<()> {
+        let s = self.store.lock().unwrap().get(sid)?;
+        // Explicit resource grants remain turn-bounded. Never prolong credentials,
+        // remote attachments or arbitrary external MCP servers for a preview.
+        let keep: std::collections::HashSet<String> = if allow_coding
+            && self.backend == Backend::Off
+            && s.environment.is_none()
+            && !s.resource_policy.bounded_lifecycle()
+        {
+            self.bundle
+                .tools
+                .bindings
+                .values()
+                .filter(|b| {
+                    matches!(b.tool.as_str(), "process_start" | "run_shell")
+                        && self
+                            .bundle
+                            .tools
+                            .servers
+                            .get(&b.server)
+                            .is_some_and(|server| {
+                                server.program == "$OPENWORKER"
+                                    && server.args == ["mcp-coding", "--workspace", "$WORKSPACE"]
+                            })
+                })
+                .map(|b| b.server.clone())
+                .collect()
+        } else {
+            Default::default()
+        };
         let clients = self.clients.lock().await.remove(sid).unwrap_or_default();
         let mut failure = None;
         // Attempt every cleanup; failure of one server must not strand the others.
         for (server, client) in clients {
+            if keep.contains(&server) {
+                self.clients
+                    .lock()
+                    .await
+                    .entry(sid.into())
+                    .or_default()
+                    .insert(server, client);
+                continue;
+            }
             if let Err(e) = client.lock().await.close().await {
                 let detail = format!("Cleanup of server {server}: {e:#}");
                 failure.get_or_insert(e.context(detail));
@@ -2411,6 +2455,9 @@ impl Runtime {
             self.store.lock().unwrap().abandon_attachments(sid)?;
         }
         for (server, id) in &s.direct_processes {
+            if keep.contains(server) {
+                continue;
+            }
             match crate::direct::cleanup(id).await {
                 Ok(()) => {
                     if let Err(e) = self.update(

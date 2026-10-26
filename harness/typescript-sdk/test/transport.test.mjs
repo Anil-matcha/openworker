@@ -35,6 +35,15 @@ async function recovered(h, previousPid) {
   }
   throw Error("did not recover");
 }
+test("recovery waits for host exit, not descendant pipe EOF", async(t)=>{
+  const {h,root}=await setup(t);
+  const marker=join(root,"holder.pid"); const old=h.pid;
+  await assert.rejects(h.request("crash_with_inherited_pipes",{marker}),{code:"OutcomeUnknown"});
+  const pid=Number(await readFile(marker,"utf8"));
+  t.after(()=>{try{process.kill(pid,"SIGKILL");}catch{}});
+  await recovered(h,old);
+  assert.deepEqual(await h.request("echo",{ok:true}),{ok:true});
+});
 test("handshake, JSON framing, concurrent callers and safe environment", async (t) => {
   process.env.OW_TS_SECRET = "not-inherited";
   process.env.OPENAI_API_KEY = "not-inherited-either";
@@ -59,6 +68,7 @@ test("handshake, JSON framing, concurrent callers and safe environment", async (
 });
 test("dynamic agent handles fail clearly against older hosts", async (t) => {
   const { h, root } = await setup(t);
+  await assert.rejects(h.session("assistant", { autoSkipQuestions: true }), { code: "Setup" });
   const agent = h.createAgent({
     name: "builder",
     instructions: "Build.",

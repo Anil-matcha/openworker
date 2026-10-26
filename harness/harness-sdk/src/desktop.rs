@@ -10,8 +10,15 @@ pub struct SessionOptions {
     workspace: Option<PathBuf>,
     #[serde(skip_serializing_if = "Option::is_none")]
     scratch: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    auto_skip_questions: Option<bool>,
 }
 impl SessionOptions {
+    /// Override this agent's question policy for the new session only.
+    pub fn auto_skip_questions(mut self, enabled: bool) -> Self {
+        self.auto_skip_questions = Some(enabled);
+        self
+    }
     pub fn model(mut self, model: crate::Model) -> Self {
         self.model = Some(model);
         self

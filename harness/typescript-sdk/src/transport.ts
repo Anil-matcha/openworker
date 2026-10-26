@@ -250,7 +250,12 @@ export class Transport {
     let buffer = Buffer.alloc(0);
     let failed = false;
     let initialized = false;
-    const exited = new Promise<void>((resolve) => child.once("close", resolve));
+    // Descendants may inherit pipe descriptors. Their eventual EOF is not the
+    // harness lifetime: wait for the owned process to exit and release its locks.
+    const exited = new Promise<void>((resolve) => {
+      child.once("exit", () => resolve());
+      child.once("error", () => resolve());
+    });
     const lose = (message: string) => {
       if (failed) return;
       failed = true;
@@ -332,9 +337,12 @@ export class Transport {
     child.on("error", () =>
       lose("Could not launch or communicate with the harness"),
     );
-    child.on("exit", () =>
-      lose("Harness exited; reconcile durable state before retrying mutations"),
-    );
+    child.on("exit", () => {
+      lose("Harness exited; reconcile durable state before retrying mutations");
+      child.stdin.destroy();
+      child.stdout.destroy();
+      child.stderr.destroy();
+    });
     child.on("close", () => lose("Harness closed"));
     const info = record(
       await this.call("initialize", { protocol_version: "0.1" }),
@@ -425,9 +433,9 @@ export class Transport {
   }
   private async terminate(): Promise<void> {
     const child = this.child;
-    if (!child || child.exitCode !== null || child.signalCode !== null) return;
+    if (!child || child.pid === undefined || child.exitCode !== null || child.signalCode !== null) return;
     await new Promise<void>((resolve) => {
-      child.once("close", () => {
+      child.once("exit", () => {
         clearTimeout(timer);
         resolve();
       });

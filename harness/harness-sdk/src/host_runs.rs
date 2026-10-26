@@ -428,6 +428,10 @@ impl Host {
     }
 
     async fn agent_session(&self, p: &Value) -> Result<Value> {
+        ensure!(
+            p.get("auto_skip_questions").is_none_or(Value::is_boolean),
+            "auto_skip_questions must be a boolean"
+        );
         let agent = text(p, "agent")?;
         ensure!(
             self.registry.read().unwrap().agents.contains_key(agent),
@@ -486,8 +490,15 @@ impl Host {
         let name = p["name"].as_str().unwrap_or(&profile.name).to_owned();
         let options = |id: &str, name: String| {
             let mode = self.profile(id).approvals.mode();
+            let auto_skip_questions = if id == agent {
+                p.get("auto_skip_questions")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(self.profile(id).auto_skip_questions)
+            } else {
+                self.profile(id).auto_skip_questions
+            };
             let mut options = json!({"name": name, "coworker": id, "workspace": workspace,
-                   "permissions": {"mode": mode, "auto_skip_questions": false},"compaction":self.config.desktop.compaction});
+                   "permissions": {"mode": mode, "auto_skip_questions": auto_skip_questions},"compaction":self.config.desktop.compaction});
             if let Approvals::Auto(model) = self.profile(id).approvals {
                 options["reviewer_model"] = json!(model);
             }

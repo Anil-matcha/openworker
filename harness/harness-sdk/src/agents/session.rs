@@ -362,6 +362,13 @@ impl Session {
         Self::create_options(client, options).await
     }
     pub(crate) async fn create_options(client: HarnessClient, options: Value) -> Result<Self> {
+        if options.get("auto_skip_questions").is_some()
+            && client.info()["capabilities"]["sdk_question_policy"] != true
+        {
+            return Err(Error::Setup(
+                "Update the host to configure SDK question policy".into(),
+            ));
+        }
         let created = client.request("agent/session", options).await?;
         let reference: SessionRef = serde_json::from_value(created["session"].clone())
             .map_err(|_| Error::Remote("Malformed agent/session result".into()))?;

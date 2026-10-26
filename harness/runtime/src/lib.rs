@@ -2,6 +2,7 @@ pub mod anthropic;
 pub mod bundle;
 pub mod chat_completions;
 pub mod cli;
+pub mod coding;
 pub mod compaction;
 pub mod connections;
 pub mod control;

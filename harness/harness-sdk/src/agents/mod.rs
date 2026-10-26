@@ -131,6 +131,8 @@ pub struct Agent {
     pub(crate) planning: bool,
     #[serde(default)]
     pub(crate) approvals: Approvals,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub(crate) auto_skip_questions: bool,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub(crate) subagents: Vec<Agent>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -159,6 +161,7 @@ impl Agent {
             fallback_model: default_fallback_model(),
             planning: false,
             approvals: Approvals::default(),
+            auto_skip_questions: false,
             subagents: vec![],
             servers: None,
             tool_policy: None,
@@ -233,6 +236,12 @@ impl Agent {
     }
     pub fn approvals(mut self, approvals: Approvals) -> Self {
         self.approvals = approvals;
+        self
+    }
+    /// Return a recorded "no human answer available" result instead of parking
+    /// ask_user. This does not approve tools or invent an answer.
+    pub fn auto_skip_questions(mut self, enabled: bool) -> Self {
+        self.auto_skip_questions = enabled;
         self
     }
     /// Add a subagent. A session of this agent becomes a team lead with one

@@ -63,7 +63,8 @@ pub fn native_tool<'a>(bundle: &'a Bundle, alias: &str) -> Option<&'a str> {
     let binding = bundle.tools.bindings.get(alias)?;
     let server = bundle.tools.servers.get(&binding.server)?;
     let base = ["mcp-example", "--workspace", "$WORKSPACE"];
-    let valid = server.args == base
+    let valid = server.args == ["mcp-coding", "--workspace", "$WORKSPACE"]
+        || server.args == base
         || (server.args.len() == 5
             && server.args[..3] == base
             && server.args[3] == "--label"
@@ -76,9 +77,12 @@ pub fn classify(bundle: &Bundle, alias: &str) -> Category {
         return Category::Read;
     }
     match native_tool(bundle, alias) {
-        Some("read_file" | "example_echo") => Category::Read,
-        Some("write_file") => Category::WriteLocal,
-        Some("run_shell") => Category::Execute,
+        Some(
+            "read_file" | "example_echo" | "list_files" | "search_files" | "process_status"
+            | "process_logs",
+        ) => Category::Read,
+        Some("write_file" | "edit_file") => Category::WriteLocal,
+        Some("run_shell" | "process_start" | "process_stop") => Category::Execute,
         _ => Category::External,
     }
 }
@@ -87,7 +91,10 @@ pub fn classify(bundle: &Bundle, alias: &str) -> Category {
 /// these guards. Unknown MCP effects are bounded by the execution backend, not
 /// guessed from an alias or the presence of a field called `path`.
 pub fn hard_check(bundle: &Bundle, workspace: &str, alias: &str, args: &Value) -> Result<()> {
-    if matches!(native_tool(bundle, alias), Some("write_file" | "read_file")) {
+    if matches!(
+        native_tool(bundle, alias),
+        Some("write_file" | "read_file" | "edit_file")
+    ) {
         crate::runner::path(
             Path::new(workspace),
             args["path"].as_str().context("File path required")?,
@@ -123,7 +130,10 @@ pub fn hard_check_execution(
     if !remote {
         return hard_check(bundle, workspace, alias, args);
     }
-    if matches!(native_tool(bundle, alias), Some("write_file" | "read_file")) {
+    if matches!(
+        native_tool(bundle, alias),
+        Some("write_file" | "read_file" | "edit_file")
+    ) {
         crate::runner::relative_path(args["path"].as_str().context("File path required")?)?;
     }
     Ok(())
