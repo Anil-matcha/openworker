@@ -1,6 +1,7 @@
-"""llama.cpp, vLLM and LM Studio: servers the user starts, reached through their
-OpenAI-compatible `/v1`. One module for all three, since OpenWorker treats them the same
-way and they differ only in what they report about themselves.
+"""llama.cpp, vLLM, LM Studio, Jan, Docker Model Runner and mlx-lm: servers the user
+starts, reached through their OpenAI-compatible `/v1`. One module for all of them, since
+OpenWorker treats them the same way and they differ only in what they report about
+themselves.
 
 - llama.cpp `llama-server`: `localhost:8080` by default; `/v1/models` lists the loaded
   model (its id is the file path unless the server was started with `--alias`), with
@@ -15,9 +16,16 @@ way and they differ only in what they report about themselves.
   `/v1/models` lists every downloaded model, and its own `/api/v0/models` adds each one's
   `max_context_length` and whether it is loaded. Tool calls go through the model's chat
   template, as in llama.cpp.
+- Jan: `127.0.0.1:1337` by default (Settings ▸ Local API Server ▸ Start Server, read from
+  docs.jan.ai/desktop/api-server 2026-10-26); a plain OpenAI listing, an optional key.
+- Docker Model Runner: `localhost:12434/engines/v1` by default (TCP host access turned on
+  in Docker Desktop; docs.docker.com/ai/model-runner/api-reference, read 2026-10-26). The
+  `/engines` segment is part of the path, so v1_base adds it when the user types the root.
+- mlx-lm: `127.0.0.1:8080` by default (`mlx_lm.server`, Apple silicon only; its server.py
+  read 2026-10-26) — the same port as llama.cpp, so the help says to move one of them.
 
-None of them tells the harness what the machine is; that is local_machine.py. Both may take an
-API key; without one any value is accepted, and OpenWorker sends a placeholder.
+None of them tells the harness what the machine is; that is local_machine.py. All may take
+an API key; without one any value is accepted, and OpenWorker sends a placeholder.
 """
 
 from __future__ import annotations
@@ -36,6 +44,9 @@ LOCAL_SERVERS: dict[str, dict[str, str]] = {
     "llamacpp": {"title": "llama.cpp", "default_base": "http://localhost:8080"},
     "vllm": {"title": "vLLM", "default_base": "http://localhost:8000"},
     "lmstudio": {"title": "LM Studio", "default_base": "http://localhost:1234"},
+    "jan": {"title": "Jan", "default_base": "http://127.0.0.1:1337"},
+    "docker": {"title": "Docker Model Runner", "default_base": "http://localhost:12434/engines"},
+    "mlx": {"title": "mlx-lm", "default_base": "http://127.0.0.1:8080"},
 }
 PLACEHOLDER_KEY = "none"
 CACHE_SECONDS = 60.0
@@ -45,8 +56,12 @@ _lock = threading.Lock()
 
 
 def v1_base(name: str, base_url: Optional[str]) -> str:
-    """The server's `/v1` root from what the user typed: the root, or already `/v1`."""
+    """The server's `/v1` root from what the user typed: the root, or already `/v1`.
+    Docker Model Runner serves under `/engines/v1` (or `/engines/<engine>/v1`), so a bare
+    host:port gets the `/engines` segment too."""
     base = (base_url or LOCAL_SERVERS[name]["default_base"]).strip().rstrip("/")
+    if name == "docker" and "/engines" not in base:
+        base += "/engines"
     return base if base.endswith("/v1") else base + "/v1"
 
 
@@ -234,8 +249,9 @@ def _int(value: Any) -> Optional[int]:
 
 def thinking_as_template_kwargs(settings: dict[str, Any]) -> dict[str, Any]:
     """The thinking switch travels as Ollama's `think` field (model_config.py); llama.cpp,
-    vLLM and LM Studio read it from the chat template's `enable_thinking` instead. Rewrites one into
-    the other and leaves everything else alone."""
+    vLLM, LM Studio and the other OpenAI-compatible local servers read it from the chat
+    template's `enable_thinking` instead. Rewrites one into the other and leaves everything
+    else alone."""
     extra = settings.get("extra_body")
     if not isinstance(extra, dict) or "think" not in extra:
         return settings

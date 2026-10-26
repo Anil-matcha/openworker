@@ -295,6 +295,10 @@ COMPAT_VENDORS = {
     "nvidia": "https://integrate.api.nvidia.com/v1",
     "atlascloud": "https://api.atlascloud.ai/v1",
     "upstage": "https://api.upstage.ai/v1",
+    "cerebras": "https://api.cerebras.ai/v1",
+    "huggingface": "https://router.huggingface.co/v1",
+    "cohere": "https://api.cohere.ai/compatibility/v1",
+    "siliconflow": "https://api.siliconflow.com/v1",
 }
 
 
@@ -477,6 +481,10 @@ def test_compat_models_route_and_get_tool_capabilities():
         "orcarouter:anthropic/claude-sonnet-5",
         "atlascloud:zai-org/glm-5.2",
         "upstage:solar-pro4",
+        "cerebras:gpt-oss-120b",
+        "huggingface:zai-org/GLM-5.2",
+        "cohere:command-a-plus-05-2026",
+        "siliconflow:zai-org/GLM-5.2",
     ):
         prefix = model.split(":", 1)[0]
         assert router._provider_name(model) == prefix

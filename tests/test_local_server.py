@@ -1,5 +1,5 @@
-"""llama.cpp, vLLM and LM Studio as providers (providers/local_server.py, registry.py): the user's
-own server through its /v1, what each reports about its model, and how the server's
+"""The OpenAI-compatible local servers as providers (providers/local_server.py, registry.py:
+llama.cpp, vLLM, LM Studio, Jan, Docker Model Runner, mlx-lm): the user's own server through its /v1, what each reports about its model, and how the server's
 model lists, liveness and adoption treat them."""
 
 from __future__ import annotations
@@ -30,9 +30,10 @@ def _fake_http(monkeypatch, handler):
 def test_descriptors_carry_a_kind_for_grouping():
     kinds = {d.name: d.kind for d in provider_descriptors()}
     assert kinds["ollama"] == kinds["llamacpp"] == kinds["vllm"] == kinds["lmstudio"] == "local"
+    assert kinds["jan"] == kinds["docker"] == kinds["mlx"] == "local"
     assert kinds["openai-codex"] == "subscription"
     assert kinds["openai"] == kinds["anthropic"] == "api_key"
-    for name in ("llamacpp", "vllm", "lmstudio"):
+    for name in local_server.LOCAL_SERVERS:
         d = get_descriptor(name)
         assert d is not None and not d.needs_key
         assert [f.key for f in d.fields] == ["base_url", "api_key"]
@@ -46,6 +47,16 @@ def test_v1_base_takes_the_root_or_an_explicit_v1():
     assert local_server.v1_base("vllm", "http://box.local:8000/v1") == "http://box.local:8000/v1"
     assert local_server.v1_base("lmstudio", None) == "http://localhost:1234/v1"
     assert local_server.v1_base("lmstudio", "http://127.0.0.1:1234/v1/") == "http://127.0.0.1:1234/v1"
+    assert local_server.v1_base("jan", None) == "http://127.0.0.1:1337/v1"
+    assert local_server.v1_base("mlx", None) == "http://127.0.0.1:8080/v1"
+    assert local_server.v1_base("mlx", "http://127.0.0.1:8081") == "http://127.0.0.1:8081/v1"
+    # Docker Model Runner's API sits under /engines: the root, /engines and /engines/v1 all
+    # land on the same place, and a named engine path is kept.
+    assert local_server.v1_base("docker", None) == "http://localhost:12434/engines/v1"
+    assert local_server.v1_base("docker", "http://localhost:12434") == "http://localhost:12434/engines/v1"
+    assert local_server.v1_base("docker", "http://localhost:12434/engines") == "http://localhost:12434/engines/v1"
+    assert local_server.v1_base("docker", "http://localhost:12434/engines/v1") == "http://localhost:12434/engines/v1"
+    assert local_server.v1_base("docker", "http://box:12434/engines/llama.cpp/") == "http://box:12434/engines/llama.cpp/v1"
 
 
 def test_the_builder_sends_a_placeholder_key_when_none_is_set():
@@ -56,6 +67,10 @@ def test_the_builder_sends_a_placeholder_key_when_none_is_set():
     assert client._base_url == "http://gpu:8000/v1" and client._api_key == "s3"
     client = get_descriptor("lmstudio").build({}, None)
     assert client._base_url == "http://localhost:1234/v1" and client._api_key == "none"
+    client = get_descriptor("docker").build({"base_url": "http://localhost:12434"}, None)
+    assert client._base_url == "http://localhost:12434/engines/v1" and client._api_key == "none"
+    client = get_descriptor("jan").build({}, None)
+    assert client._base_url == "http://127.0.0.1:1337/v1"
 
 
 def test_llamacpp_facts_come_from_models_and_props(monkeypatch):
@@ -124,6 +139,29 @@ def test_lmstudio_facts_survive_a_missing_own_listing(monkeypatch):
     assert row["context"] is None and row["context_max"] is None
 
 
+@pytest.mark.parametrize("name,base,path", [
+    ("jan", "http://127.0.0.1:1337", "/v1/models"),
+    ("docker", "http://localhost:12434", "/engines/v1/models"),
+    ("mlx", "http://127.0.0.1:8081", "/v1/models"),
+])
+def test_plain_listing_servers_report_their_models(monkeypatch, name, base, path):
+    """Jan, Docker Model Runner and mlx-lm answer a plain OpenAI listing: one row per id,
+    routed under the provider's prefix, with no window claimed."""
+    seen = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request.url.path)
+        if request.url.path == path:
+            return httpx.Response(200, json={"data": [{"id": "org/some-model", "object": "model"}]})
+        return httpx.Response(404)
+
+    _fake_http(monkeypatch, handler)
+    (row,) = local_server.model_facts(name, base)
+    assert row["model"] == f"{name}:org/some-model" and row["name"] == "org/some-model"
+    assert row["context"] is None and row["tools"] is None
+    assert seen[0] == path
+
+
 def test_vllm_facts_probe_whether_tool_calling_is_on(monkeypatch):
     calls = []
 
@@ -166,7 +204,7 @@ def test_thinking_switch_reaches_llama_cpp_and_vllm_as_template_kwargs(monkeypat
 
     sent = {}
     monkeypatch.setattr(openai_provider.OpenAIProvider, "complete", lambda self, **kw: sent.update(kw) or "ok")
-    for name in ("llamacpp", "vllm", "lmstudio"):
+    for name in local_server.LOCAL_SERVERS:
         client = get_descriptor(name).build({}, None)
         client.complete(model="m", messages=[], max_tokens=10, extra_body={"think": False})
         assert sent["extra_body"] == {"chat_template_kwargs": {"enable_thinking": False}}
