@@ -4278,7 +4278,7 @@ class SessionManager:
             "nvidia/nemotron-3-super-120b-a12b",
             "nvidia/nemotron-3-ultra-550b-a55b",
         ],
-        "atlascloud": ["openai/gpt-4.1-mini"],
+        "atlascloud": ["zai-org/glm-5.2"],
     }
 
     def _suggested_models(self, name: str) -> list[str]:
