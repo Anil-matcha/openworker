@@ -1271,6 +1271,72 @@ export async function inspectPdf(
   return res.json();
 }
 
+// -- Settings ▸ Customization ▸ Web search (UX-058) --------------------------------
+// One provider is active; every provider keeps its own key in the machine's secret store
+// (never returned here — only whether one exists and where it came from).
+export type WebSearchProviderInfo = {
+  name: string;
+  display_name: string;
+  key_mode: "none" | "optional" | "required";
+  key_url: string;
+  has_key: boolean;
+  key_source: "store" | "env" | null;
+  // The environment variable the key comes from, when key_source is "env".
+  key_env: string;
+  // Whether `web_fetch` can read pages through this provider (Exa, Firecrawl, Tavily).
+  supports_fetch: boolean;
+};
+export type WebSearchInfo = {
+  provider: string;
+  fetch_via_provider: boolean;
+  providers: WebSearchProviderInfo[];
+};
+type WebSearchResult = { ok: boolean; error?: string } & Partial<WebSearchInfo>;
+
+export async function getWebSearch(machineId?: string | null): Promise<WebSearchInfo> {
+  const res = await fetch(`${engineBase(machineId)}/v1/web-search`);
+  if (!res.ok) throw new Error(`web-search: ${res.status}`);
+  return res.json();
+}
+
+/** Make `name` the active search service. A 400 (a keyed service with no key) comes back
+ * as `{ok: false, error}` with the server's plain message. */
+export async function setWebSearchProvider(name: string, machineId?: string | null): Promise<WebSearchResult> {
+  const res = await fetch(`${engineBase(machineId)}/v1/web-search`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ provider: name }),
+  });
+  return res.json();
+}
+
+/** "Test and save": the server runs one search with the key before storing it. */
+export async function setWebSearchKey(name: string, apiKey: string, machineId?: string | null): Promise<WebSearchResult> {
+  const res = await fetch(`${engineBase(machineId)}/v1/web-search/keys/${encodeURIComponent(name)}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ api_key: apiKey }),
+  });
+  return res.json();
+}
+
+export async function clearWebSearchKey(name: string, machineId?: string | null): Promise<WebSearchResult> {
+  const res = await fetch(`${engineBase(machineId)}/v1/web-search/keys/${encodeURIComponent(name)}`, {
+    method: "DELETE",
+  });
+  return res.json();
+}
+
+/** "Fetch pages through the search service" — honoured while the active provider offers it. */
+export async function setFetchViaProvider(enabled: boolean, machineId?: string | null): Promise<WebSearchResult> {
+  const res = await fetch(`${engineBase(machineId)}/v1/web-search/fetch-via-provider`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ enabled }),
+  });
+  return res.json();
+}
+
 /** Persist whether the composer shows the context-window fill bar. */
 export async function setContextBar(
   shown: boolean,

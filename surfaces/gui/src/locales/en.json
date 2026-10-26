@@ -356,7 +356,8 @@
       "personas": "Coworkers",
       "context": "Context optimization",
       "skills": "Skills",
-      "memory": "Memory"
+      "memory": "Memory",
+      "customization": "Customization"
     },
     "general_title": "General",
     "general_sub": "How OpenWorker looks and behaves on this machine.",
@@ -726,6 +727,7 @@
     "save_skill_footer": "Approving adds it to your skills on this computer — usable in every conversation from then on.",
     "search_note": "Queries go to your configured search provider.",
     "search_note_current": "Queries go to your configured search provider (currently: {{provider}}).",
+    "fetch_note_current": "The page is fetched through {{provider}}, which sees its address.",
     "reviewer_unsure": "reviewer wasn’t sure: {{note}}",
     "site_wall_note": "{{host}} is not on your allowed sites.",
     "network": {
@@ -2841,5 +2843,38 @@
     "next": "Next",
     "add": "Add",
     "save": "Save"
+  }
+,
+  "customization": {
+    "title": "Customization",
+    "lead": "Pick the services OpenWorker uses behind its tools. Each choice applies to new sessions on this machine.",
+    "lead_machine": "Pick the services OpenWorker uses behind its tools on {{name}}. Each choice applies to new sessions there.",
+    "websearch": {
+      "title": "Web search",
+      "desc": "Used by the web_search tool. Keys are kept in this machine's secret store; each service keeps its own, so switching back costs nothing.",
+      "status_duckduckgo": "No key. Rate-limited, fine for occasional searches.",
+      "status_you": "Works without a key, with a daily limit. A key lifts it.",
+      "key_saved": "Key saved",
+      "key_env": "Key from environment {{var}}",
+      "in_use": "In use",
+      "add_key": "Add key",
+      "update_key": "Update key",
+      "cancel": "Cancel",
+      "key_placeholder": "{{name}} API key",
+      "test_and_save": "Test and save",
+      "testing": "Testing…",
+      "checked_hint": "Checked with one search.",
+      "get_key": "Get a key ↗",
+      "remove_key": "Remove key",
+      "footnote": "A service with no key can't be chosen until one is added. The agent's approval card names the service in use.",
+      "load_failed": "Couldn't load the web search settings.",
+      "failed": "That didn't work. Try again."
+    },
+    "fetch": {
+      "title": "Fetch pages through the search service",
+      "desc": "Off: pages are fetched from this machine. On: {{service}} fetches them, and sees each page address. Offered by Exa, Firecrawl and Tavily.",
+      "service_generic": "the search service",
+      "unsupported": "{{service}} doesn't offer this. Choose Exa, Firecrawl or Tavily to turn it on."
+    }
   }
 }

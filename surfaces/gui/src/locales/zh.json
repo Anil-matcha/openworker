@@ -349,7 +349,8 @@
       "personas": "同事",
       "context": "上下文优化",
       "skills": "技能",
-      "memory": "记忆"
+      "memory": "记忆",
+      "customization": "自定义"
     },
     "general_title": "通用",
     "general_sub": "OpenWorker 在本机的外观与行为。",
@@ -715,6 +716,7 @@
     "save_skill_footer": "批准后会将其添加到本机的技能中 —— 此后每个会话都可使用。",
     "search_note": "查询会发送到你配置的搜索服务商。",
     "search_note_current": "查询会发送到你配置的搜索服务商（当前：{{provider}}）。",
+    "fetch_note_current": "该网页通过 {{provider}} 抓取，它会看到网页地址。",
     "reviewer_unsure": "审查器不确定：{{note}}",
     "site_wall_note": "{{host}} 不在你允许的网站列表中。",
     "network": {
@@ -2801,5 +2803,38 @@
     "next": "下一步",
     "add": "添加",
     "save": "保存"
+  }
+,
+  "customization": {
+    "title": "自定义",
+    "lead": "选择 OpenWorker 各工具背后使用的服务。所做选择对本机的新会话生效。",
+    "lead_machine": "选择 OpenWorker 在 {{name}} 上各工具背后使用的服务。所做选择对该机器的新会话生效。",
+    "websearch": {
+      "title": "网页搜索",
+      "desc": "供 web_search 工具使用。密钥保存在本机的密钥库中；每个服务各自保留密钥，切换回来无需重新填写。",
+      "status_duckduckgo": "无需密钥。有频率限制，偶尔搜索够用。",
+      "status_you": "无需密钥即可使用，但有每日上限；添加密钥可解除。",
+      "key_saved": "已保存密钥",
+      "key_env": "密钥来自环境变量 {{var}}",
+      "in_use": "使用中",
+      "add_key": "添加密钥",
+      "update_key": "更新密钥",
+      "cancel": "取消",
+      "key_placeholder": "{{name}} API 密钥",
+      "test_and_save": "测试并保存",
+      "testing": "测试中…",
+      "checked_hint": "会用一次搜索来检查。",
+      "get_key": "获取密钥 ↗",
+      "remove_key": "移除密钥",
+      "footnote": "没有密钥的服务要先添加密钥才能选用。智能体的审批卡片会注明所用的服务。",
+      "load_failed": "无法加载网页搜索设置。",
+      "failed": "操作未成功，请重试。"
+    },
+    "fetch": {
+      "title": "通过搜索服务抓取网页",
+      "desc": "关闭：网页由本机抓取。开启：由 {{service}} 抓取，它会看到每个网页地址。Exa、Firecrawl 和 Tavily 提供此功能。",
+      "service_generic": "搜索服务",
+      "unsupported": "{{service}} 不提供此功能。选择 Exa、Firecrawl 或 Tavily 后即可开启。"
+    }
   }
 }
