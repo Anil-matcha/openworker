@@ -16,6 +16,19 @@ const localServer = (name: string, title: string, placeholder: string) => ({
   ],
 });
 
+/** Every image decoded and the fonts in: a card's SVG mark can otherwise be captured
+ * before it paints (the vLLM mark came out blank once). */
+async function painted(page) {
+  await page.evaluate(async () => {
+    await Promise.all(
+      Array.from(document.images).map((img) =>
+        img.complete ? img.decode().catch(() => {}) : new Promise<void>((done) => { img.onload = img.onerror = () => done(); }),
+      ),
+    );
+    await (document as any).fonts?.ready;
+  });
+}
+
 async function openModels(page) {
   await page.goto("/");
   await page.getByTestId("account-row").click();
@@ -35,11 +48,13 @@ for (const scheme of ["light", "dark"] as const) {
     await page.getByTestId("custom-provider-title").fill("Acme Gateway");
     await page.getByTestId("custom-provider-endpoint").fill("https://llm.acme.example/v1");
     await page.getByTestId("custom-provider-key").fill("acme-test");
+    await painted(page);
     await page.screenshot({ path: path.join(OUT, `models-custom-provider-form${suffix}.png`) });
     await page.getByTestId("custom-provider-add").click();
     await expect(page.getByTestId("set-field-base_url")).toHaveValue("https://llm.acme.example/v1");
     await page.getByTestId("set-back").click();
     await expect(page.getByTestId("set-provider-acme-gateway")).toBeVisible();
+    await painted(page);
     await page.screenshot({ path: path.join(OUT, `models-custom-provider${suffix}.png`) });
   });
 
@@ -47,6 +62,10 @@ for (const scheme of ["light", "dark"] as const) {
     await page.route("**/v1/providers", (route) =>
       route.fulfill({
         json: [
+          // The cloud rows the default fixture carries, so the picker card below names
+          // the vendors the same way as in the other scene.
+          { name: "openai", title: "OpenAI", needs_key: true, configured: true, values: {}, suggested_models: ["gpt-5.5"], recommended_model: null, key_set_at: "2026-06-12", last_used_at: null, fields: [{ key: "api_key", label: "OpenAI API key", secret: true, required: true, help: "", placeholder: "sk-…" }] },
+          { name: "anthropic", title: "Claude (Anthropic)", needs_key: true, configured: true, values: {}, suggested_models: ["claude-opus-4-8"], recommended_model: null, key_set_at: null, last_used_at: null, fields: [{ key: "api_key", label: "API key", secret: true, required: true, help: "", placeholder: "sk-…" }] },
           { name: "ollama", title: "Ollama", kind: "local", needs_key: false, configured: true, values: {}, suggested_models: [], recommended_model: null, alive: true, fields: [] },
           localServer("llamacpp", "llama.cpp", "http://localhost:8080"),
           localServer("vllm", "vLLM", "http://localhost:8000"),
@@ -65,6 +84,7 @@ for (const scheme of ["light", "dark"] as const) {
     const more = page.getByTestId("provider-more-local");
     if (await more.isVisible()) await more.click();
     await expect(page.getByTestId("set-provider-vllm")).toBeVisible();
+    await painted(page);
     await page.screenshot({ path: path.join(OUT, `models-local-servers${suffix}.png`) });
   });
 }
