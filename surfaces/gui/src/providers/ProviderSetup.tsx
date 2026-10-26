@@ -482,10 +482,18 @@ export function ProviderForm({
   ps,
   tp,
   footer,
+  status,
+  blurb,
+  guided,
 }: {
   ps: ProviderSetupState;
   tp: string;
   footer?: ReactNode;
+  // A guided setup (llama.cpp on a Mac, UX-057) replaces the status line, the blurb and
+  // the fields; the footer stays.
+  status?: ReactNode;
+  blurb?: string;
+  guided?: ReactNode;
 }) {
   const { t } = useTranslation();
   const { info, sel } = ps;
@@ -568,10 +576,11 @@ export function ProviderForm({
         <ProviderMark name={info?.name || ""} title={info?.title || ""} size={36} />
         <span className="min-w-0">
           <span className="block text-body font-semibold leading-tight">{info?.title}</span>
-          {info ? ps.statusFor(info) : null}
+          {status ?? (info ? ps.statusFor(info) : null)}
         </span>
       </div>
-      {info?.blurb && <p className="text-meta text-faint mt-1">{info.blurb}</p>}
+      {(blurb ?? info?.blurb) && <p className="text-meta text-faint mt-1">{blurb ?? info?.blurb}</p>}
+      {guided}
 
       {info?.auth === "oauth" &&
         (info.name === "openrouter-account" ? (
@@ -580,7 +589,7 @@ export function ProviderForm({
           <OAuthSignIn info={info} tp={tp} onChanged={ps.refreshProviders} />
         ))}
 
-      {fieldsAll
+      {!guided && fieldsAll
         .filter(
           (f) =>
             !f.show_when &&
@@ -674,7 +683,7 @@ export function ProviderForm({
           {t("provider.takes_a_minute")}
         </p>
       )}
-      {info && !info.needs_key && info.auth !== "oauth" && LOCAL_HELP[info.name] && (
+      {!guided && info && !info.needs_key && info.auth !== "oauth" && LOCAL_HELP[info.name] && (
         <p className="text-meta text-faint mt-2">
           {t(LOCAL_HELP[info.name].desc)}{" "}
           <button
@@ -691,7 +700,7 @@ export function ProviderForm({
           (owner calls 2026-07-18 + 2026-07-19). */}
       {(() => {
         const keyed = (info?.fields || []).some((x) => x.secret);
-        const ep = keyed ? (info?.fields || []).find((f) => f.key === "base_url") : undefined;
+        const ep = keyed && !guided ? (info?.fields || []).find((f) => f.key === "base_url") : undefined;
         if (!ep) return null;
         if (!ps.showEndpoint)
           return (
