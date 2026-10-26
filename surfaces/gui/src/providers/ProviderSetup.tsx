@@ -57,6 +57,7 @@ export const KEY_HELP: Record<string, { url: string; label: string; labelKey?: s
   groq: { url: "https://console.groq.com/keys", label: "console.groq.com" },
   trustedrouter: { url: "https://trustedrouter.com/console/api-keys", label: "trustedrouter.com" },
   upstage: { url: "https://console.upstage.ai/api-keys", label: "console.upstage.ai" },
+  anyrouter: { url: "https://anyrouter.dev/dashboard/keys", label: "anyrouter.dev" },
 };
 
 export type Verify = { state: "idle" | "testing" | "ok" | "error"; msg?: string };
