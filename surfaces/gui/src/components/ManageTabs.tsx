@@ -197,7 +197,14 @@ export function ModelsTab() {
           <p className="text-meta text-muted mb-2.5 leading-relaxed">
             {t("manage.models_help")}
           </p>
+          {ps.sel === "azure" && (
+            // No catalogue on Azure: the id to add is the deployment's name.
+            <p className="text-meta text-muted mb-2.5 leading-relaxed" data-testid="set-azure-deployment-note">
+              {t("manage.azure_deployment_help")}
+            </p>
+          )}
           <ModelChecklist
+
             provider={ps.sel}
             knownProviders={knownNames}
             suggested={info?.suggested_models || []}

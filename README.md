@@ -87,9 +87,12 @@ Unattended runs never self-approve: their asks park in an inbox until a human an
 
 Model access is yours: pick a provider, paste your key, switch anytime. Supported out of the box:
 
-**OpenAI · Anthropic · Google Gemini · BytePlus Ark · Volcengine Ark Agent Plan · Atlas Cloud · Inkling (Thinking Machines) · GLM (Z.ai) · DeepSeek · Kimi (Moonshot) · Qwen · MiniMax · Mistral · Grok (xAI) · Solar (Upstage)** - plus aggregators **OrcaRouter** and **OpenRouter**, open-weight models via **Together** and **Fireworks**, and fully local models via **Ollama**.
+**OpenAI · Azure OpenAI · Anthropic · Google Gemini · BytePlus Ark · Volcengine Ark Agent Plan · Atlas Cloud · Inkling (Thinking Machines) · GLM (Z.ai) · DeepSeek · Kimi (Moonshot) · Qwen · MiniMax · Mistral · Grok (xAI) · Solar (Upstage)** - plus aggregators **OrcaRouter** and **OpenRouter**, open-weight models via **Together** and **Fireworks**, and fully local models via **Ollama**.
 
 A curated model list marks what we've verified for tool-calling work. Adding any model string works at your own risk.
+
+Azure OpenAI uses your own resource: paste its endpoint and key (or set `AZURE_OPENAI_API_KEY`), then add your deployment names as models — on Azure the model id is the deployment name.
+
 
 ## Privacy
 

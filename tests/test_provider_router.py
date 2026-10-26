@@ -653,3 +653,49 @@ def test_manager_key_hygiene_stamps(tmp_path, monkeypatch):
     mgr2 = SessionManager(data_dir=tmp_path)
     provs2 = {p["name"]: p for p in mgr2.get_providers()}
     assert provs2["deepseek"]["last_used_at"] == first
+
+
+def test_manager_azure_card_saves_endpoint_and_key_and_verifies_at_the_resource(
+    tmp_path, monkeypatch
+):
+    """Settings ▸ Models for Azure OpenAI: both fields are required to save; the stored
+    endpoint comes back for prefilling, the key never does; Test probes the resource with
+    the merged (stored + typed) fields; nothing is auto-added to the picker (no catalogue)."""
+    monkeypatch.setenv("COWORKER_STATE_DIR", str(tmp_path / "state"))
+    monkeypatch.delenv("AZURE_OPENAI_API_KEY", raising=False)
+    from coworker.server.manager import SessionManager
+
+    mgr = SessionManager(data_dir=tmp_path)
+    res = mgr.set_provider("azure", {"api_key": "az-key"})
+    assert res["ok"] is False and "Endpoint" in res["error"]
+    res = mgr.set_provider(
+        "azure", {"endpoint": "https://contoso.openai.azure.com", "api_key": "az-key"}
+    )
+    assert res["ok"] and res["recommended_model"] is None
+
+    row = next(p for p in mgr.get_providers() if p["name"] == "azure")
+    assert row["configured"] is True
+    assert row["values"] == {"endpoint": "https://contoso.openai.azure.com"}
+    assert row["suggested_models"] == []
+    assert "api_key" not in row["values"]
+    assert not any(m.startswith("azure:") for m in mgr.get_settings()["models"])
+
+    # Test with the stored credentials: the probe goes to the resource's v1 model list.
+    seen: dict = {}
+
+    def fake_get(url, **kwargs):
+        seen["url"] = url
+        seen.update(kwargs)
+        from types import SimpleNamespace
+
+        return SimpleNamespace(status_code=200)
+
+    monkeypatch.setattr("httpx.get", fake_get)
+    assert mgr.verify_provider("azure", {}) == {"ok": True}
+    assert seen["url"] == "https://contoso.openai.azure.com/openai/v1/models"
+    assert seen["headers"]["Authorization"] == "Bearer az-key"
+
+    # A deployment the user adds routes to the azure provider.
+    added = mgr.add_model("azure:gpt-5-prod")
+    assert added["ok"] and "azure:gpt-5-prod" in added["models"]
+    assert mgr._model_provider("azure:gpt-5-prod") == "azure"

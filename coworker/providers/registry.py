@@ -7,8 +7,9 @@ a `ProviderClient`. The `ProviderRouter` selects a descriptor by the `provider:`
 model string and builds (and caches) its client from the matching SecretStore profile.
 
 Today: `openai` (the default — native models via the Responses API; an optional custom
-endpoint covering Azure OpenAI's `/openai/v1` and any OpenAI-compliant gateway keeps the
-Chat Completions path), `anthropic` (native Messages API via
+endpoint for vLLM and any OpenAI-compliant gateway keeps the Chat Completions path),
+`azure` (the user's own Azure OpenAI / Foundry resource through its `/openai/v1` API,
+key-authenticated; model ids are deployment names), `anthropic` (native Messages API via
 `AnthropicProvider`), `gemini` (native Google GenAI API via `GeminiProvider`), `bedrock`
 (models in the user's own AWS account — Claude natively, everything else via Converse),
 `vertex` (the user's own GCP project — Gemini and Claude natively, open-weight via the
@@ -125,13 +126,68 @@ def _normalize_ollama_url(url: Optional[str]) -> str:
 def _build_openai(profile: dict[str, Any], secrets: Any) -> ProviderClient:
     # Key resolution stays in resolve_api_key (explicit → env → SecretStore), so we just
     # hand over the SecretStore. Stock OpenAI (no custom endpoint) speaks the Responses
-    # API — the only wire with reasoning + tools on GPT-5.6+. A custom endpoint (Azure
-    # OpenAI /openai/v1, vLLM, any OpenAI-compliant gateway) keeps Chat Completions,
-    # which is what compat servers implement.
+    # API — the only wire with reasoning + tools on GPT-5.6+. A custom endpoint (vLLM,
+    # any OpenAI-compliant gateway) keeps Chat Completions, which is what compat servers
+    # implement. Azure OpenAI has its own card below (`azure`); an Azure `/openai/v1`
+    # URL pasted here keeps working for users who set it up before that card existed.
     base_url = ((profile or {}).get("base_url") or "").strip() or None
     if base_url:
         return OpenAIProvider(secrets=secrets, base_url=base_url)
     return OpenAIResponsesProvider(secrets=secrets)
+
+
+AZURE_OPENAI_ENV_KEY = "AZURE_OPENAI_API_KEY"
+_AZURE_V1_SUFFIX = "/openai/v1"
+
+
+def normalize_azure_endpoint(endpoint: Optional[str]) -> str:
+    """The `/openai/v1` base URL for an Azure OpenAI or Foundry resource, from whatever the
+    user pasted: the bare resource endpoint (`https://<resource>.openai.azure.com`, also
+    `…services.ai.azure.com` and sovereign-cloud hosts), one already ending in `/openai`
+    or `/openai/v1`, or a full request URL copied from the portal (its path and
+    `?api-version=` query are dropped — the v1 API takes neither). Empty in ⇒ empty out.
+
+    Base URL per learn.microsoft.com/azure/ai-foundry/openai/api-version-lifecycle
+    (read 2026-10-26): append `/openai/v1` to the resource endpoint; no api-version.
+    """
+    raw = (endpoint or "").strip().split("?", 1)[0].split("#", 1)[0].rstrip("/")
+    if not raw:
+        return ""
+    if "://" not in raw:
+        raw = "https://" + raw
+    lowered = raw.lower()
+    if lowered.endswith(_AZURE_V1_SUFFIX):
+        return raw
+    if lowered.endswith("/openai"):
+        return raw + "/v1"
+    # A deployments URL (`…/openai/deployments/<name>/chat/completions`) or any other
+    # path under /openai: keep the origin and the /openai segment, drop the rest.
+    marker = lowered.find("/openai/")
+    if marker != -1:
+        return raw[:marker] + _AZURE_V1_SUFFIX
+    return raw + _AZURE_V1_SUFFIX
+
+
+def _build_azure(profile: dict[str, Any], secrets: Any) -> ProviderClient:
+    """Azure OpenAI through the v1 API: the stock OpenAI SDK pointed at
+    `<endpoint>/openai/v1`. The key comes from THIS provider's profile or
+    AZURE_OPENAI_API_KEY only — never the OpenAI key or SecretStore fallback, so a
+    configured OpenAI key is never sent to an Azure host (same guard as the compat
+    vendors). Chat Completions, as the OpenAI custom-endpoint path always used for Azure."""
+    p = profile or {}
+    base_url = normalize_azure_endpoint(p.get("endpoint"))
+    if not base_url:
+        raise RuntimeError(
+            "No Azure OpenAI endpoint configured — add it in Settings ▸ Models."
+        )
+    api_key = (p.get("api_key") or "").strip() or os.environ.get(
+        AZURE_OPENAI_ENV_KEY, ""
+    ).strip()
+    if not api_key:
+        raise RuntimeError(
+            "No Azure OpenAI API key configured — add it in Settings ▸ Models."
+        )
+    return OpenAIProvider(api_key=api_key, base_url=base_url)
 
 
 def _build_codex(profile: dict[str, Any], secrets: Any) -> ProviderClient:
@@ -397,14 +453,46 @@ DESCRIPTORS: list[ProviderDescriptor] = [
                 "Custom endpoint (optional)",
                 secret=False,
                 required=False,
-                placeholder="https://…/openai/v1",
-                help="For Azure OpenAI, vLLM, or any OpenAI-compliant server. Leave blank for api.openai.com.",
+                placeholder="https://…/v1",
+                help="For vLLM or any OpenAI-compliant server. Leave blank for api.openai.com. "
+                "Azure OpenAI has its own card.",
             ),
         ],
         build=_build_openai,
         recommended_model="gpt-5.6-sol",
         env_key="OPENAI_API_KEY",
     ),
+    # Azure OpenAI as its own card (issue #457): before it, Azure meant pasting an
+    # `/openai/v1` URL into the OpenAI card's custom endpoint, with the OpenAI key field
+    # standing in for the Azure key. Entra ID sign-in is a second auth mode to follow (#507).
+    ProviderDescriptor(
+        name="azure",
+        title="Azure OpenAI",
+        needs_key=True,
+        fields=[
+            ProviderField(
+                "endpoint",
+                "Endpoint",
+                secret=False,
+                placeholder="https://<resource>.openai.azure.com",
+                help="Your resource's endpoint, from Keys and Endpoint in the Azure portal "
+                "or the Foundry portal. /openai/v1 is added automatically; Foundry "
+                "(…services.ai.azure.com) and sovereign-cloud hosts work too.",
+            ),
+            ProviderField(
+                "api_key",
+                "Azure OpenAI API key",
+                secret=True,
+            ),
+        ],
+        build=_build_azure,
+        # No catalogue: on Azure the model id is the user's own deployment name.
+        recommended_model=None,
+        env_key=AZURE_OPENAI_ENV_KEY,
+        blurb="Your own Azure OpenAI or Foundry resource, through its v1 API — model ids "
+        "are your deployment names.",
+    ),
+
     ProviderDescriptor(
         name="openai-codex",
         kind="subscription",
@@ -927,8 +1015,13 @@ def descriptor_configured(d: ProviderDescriptor, profile: dict[str, Any]) -> boo
         return True  # keyless (Ollama) — usable out of the box
     profile = profile or {}
     if any(f.key == "api_key" for f in d.fields):
-        return bool(profile.get("api_key")) or bool(
+        has_key = bool(profile.get("api_key")) or bool(
             d.env_key and os.environ.get(d.env_key)
+        )
+        # A key alone is not enough where the card also requires a non-secret field
+        # (Azure's endpoint): an env key with nowhere to send it is not configured.
+        return has_key and all(
+            profile.get(f.key) for f in d.fields if f.required and not f.secret
         )
     return all(profile.get(f.key) for f in d.fields if f.required)
 
@@ -1213,6 +1306,27 @@ def verify_provider_key(
                 params={"key": key},
                 timeout=timeout,
             )
+        elif name == "azure":
+            # The Azure v1 API's own model list, at the user's resource — never
+            # api.openai.com. The key rides as a bearer token, exactly as the OpenAI SDK
+            # sends it at run time (the v1 spec takes the key in `authorization` as
+            # well as `api-key`), so a passing Test proves the path the sessions use.
+            endpoint = normalize_azure_endpoint(
+                (fields or {}).get("endpoint") or base_url
+            )
+            if not endpoint:
+                return {"ok": False, "error": "Enter the Azure OpenAI endpoint to test."}
+            resp = httpx.get(
+                endpoint + "/models",
+                headers={"Authorization": f"Bearer {key}"},
+                timeout=timeout,
+            )
+            if resp.status_code == 404:
+                return {
+                    "ok": False,
+                    "error": "Reached the host, but no Azure OpenAI v1 API at this "
+                    "endpoint — check the resource endpoint.",
+                }
         elif name == "ollama":
             base = _normalize_ollama_url(base_url)
             resp = httpx.get(base.rstrip("/") + "/models", timeout=timeout)
