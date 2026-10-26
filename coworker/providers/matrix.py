@@ -16,7 +16,7 @@ where the vendor spec wasn't re-checked stay ``None`` — the meter simply hides
 showing a made-up denominator. Values entered 2026-07-28 from vendor docs; verify alongside
 the id refresh.
 
-Resellers: Together + Fireworks + OpenRouter + Nebius. TODO: add Groq entries here AND its
+Resellers: Together + Fireworks + OpenRouter + Nebius + OrcaRouter. TODO: add Groq entries here AND its
 descriptor in ``registry.py`` once the current provider surface is tested — deliberately
 deferred to bound how much needs verifying at once.
 """
@@ -320,6 +320,20 @@ MATRIX: dict[str, ModelEntry] = {
     # the real model; keep it until OpenRouter retires it.
     "openrouter:stealth/ox-alpha": ModelEntry(
         "Ox Alpha · via OpenRouter", _AGENTIC, 1_048_576
+    ),
+    # OrcaRouter: the same vendor namespaces, one key for all of them. Ids, windows and
+    # tool support from api.orcarouter.ai/v1/models (keyless, read 2026-10-25:
+    # `context_length` 1,000,000 and 1,048,576; both list `tools`; Sonnet 5 declares
+    # image input, PDFs unverified over the compat surface).
+    "orcarouter:anthropic/claude-sonnet-5": ModelEntry(
+        "Claude Sonnet 5 · via OrcaRouter",
+        ModelCapabilities(
+            tools=True, vision=True, parallel_tool_calls=True, streaming=True
+        ),
+        1_000_000,
+    ),
+    "orcarouter:deepseek/deepseek-v4-pro": ModelEntry(
+        "DeepSeek V4 Pro · via OrcaRouter", _AGENTIC, 1_048_576
     ),
     # -- cloud accounts (models running in the user's own AWS/GCP) ----------------
     # Bedrock ids carry a family segment (claude/ → native Anthropic path, other/ →

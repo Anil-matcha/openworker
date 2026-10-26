@@ -17,6 +17,7 @@ import vllm from "./logos/vllm.svg";
 import bedrock from "./logos/bedrock.svg";
 import vertex from "./logos/vertex.svg";
 import openrouter from "./logos/openrouter.svg";
+import orcarouter from "./logos/orcarouter.svg";
 import fireworks from "./logos/fireworks.svg";
 import together from "./logos/together.svg";
 import zai from "./logos/zai.svg";
@@ -47,6 +48,7 @@ export const PROVIDER_LOGOS: Record<string, string> = {
   openrouter,
   // Same mark for the signed-in OpenRouter provider: same models, billed to the account.
   "openrouter-account": openrouter,
+  orcarouter,
   fireworks,
   together,
   nebius,
@@ -83,6 +85,7 @@ export const PROVIDER_ORDER = [
   "minimax",
   "xai",
   "nebius",
+  "orcarouter",
 ];
 
 export function providerRank(name: string): number {
