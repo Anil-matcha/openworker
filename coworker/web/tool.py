@@ -46,15 +46,15 @@ def provider_name(
     """The configured provider's NAME, without building (or validating) the provider.
     Same resolution order as `resolve_provider`. Used by the web_search approval card,
     which names the live destination (§1.9: "currently: ‹name›", never "default:")."""
-    secrets = secrets or SecretStore()
-    profile = secrets.get("web_search:default") or {}
-    return profile.get("provider") or _config_provider() or default
+    return _lookup(secrets, default)[1]
 
 
 # Where each provider's queries go. The sandbox's allowed-sites wall checks this host for
-# `web_search`, which has no url argument (OPE-219).
-PROVIDER_HOSTS = {
+# `web_search`, which has no url argument (OPE-219). A list means the destination depends
+# on whether a key is configured: the keyless host first, the keyed host last.
+PROVIDER_HOSTS: dict[str, str | list[str]] = {
     "duckduckgo": "duckduckgo.com",
+    "you": ["api.you.com", "ydc-index.io"],
     "tavily": "api.tavily.com",
     "brave": "api.search.brave.com",
     "serper": "google.serper.dev",
@@ -62,20 +62,40 @@ PROVIDER_HOSTS = {
     "firecrawl": "api.firecrawl.dev",
 }
 
+# Other environment names a provider's key may come under, beside `{NAME}_API_KEY`: You.com's
+# own docs and SDKs call it YDC_API_KEY.
+_KEY_ENV_ALIASES = {"you": ("YDC_API_KEY",)}
+
 
 def provider_host(secrets: Optional[SecretStore] = None) -> str:
     """The host the configured search provider talks to; `''` for an unknown provider."""
-    return PROVIDER_HOSTS.get(provider_name(secrets), "")
+    profile, name = _lookup(secrets, "duckduckgo")
+    hosts = PROVIDER_HOSTS.get(name, "")
+    if isinstance(hosts, str):
+        return hosts
+    return hosts[-1] if (profile.get("api_key") or _env_key(name)) else hosts[0]
 
 
 def resolve_provider(
     secrets: Optional[SecretStore] = None, *, default: str = "duckduckgo"
 ) -> WebSearchProvider:
+    profile, name = _lookup(secrets, default)
+    api_key = profile.get("api_key") or _env_key(name)
+    return build_provider(name, api_key)
+
+
+def _lookup(secrets: Optional[SecretStore], default: str) -> tuple[dict, str]:
+    """The `web_search:default` profile and the provider name it (or the config) selects."""
     secrets = secrets or SecretStore()
     profile = secrets.get("web_search:default") or {}
-    name = profile.get("provider") or _config_provider() or default
-    api_key = profile.get("api_key") or os.environ.get(f"{name.upper()}_API_KEY")
-    return build_provider(name, api_key)
+    return profile, profile.get("provider") or _config_provider() or default
+
+
+def _env_key(name: str) -> Optional[str]:
+    for var in (f"{name.upper()}_API_KEY", *_KEY_ENV_ALIASES.get(name, ())):
+        if os.environ.get(var):
+            return os.environ[var]
+    return None
 
 
 def _config_provider() -> Optional[str]:

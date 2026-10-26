@@ -25,6 +25,7 @@ from coworker.web.providers import (
     SerperProvider,
     TavilyProvider,
     WebSearchProvider,
+    YouProvider,
 )
 from coworker.web.tool import PROVIDER_HOSTS
 
@@ -229,6 +230,8 @@ def test_keyed_providers_raise_on_http_errors(monkeypatch):
         SerperProvider("k"),
         ExaProvider("k"),
         FirecrawlProvider("k"),
+        YouProvider(),
+        YouProvider("k"),
     ):
         with pytest.raises(httpx.HTTPStatusError):
             provider.search("q")
@@ -237,15 +240,143 @@ def test_keyed_providers_raise_on_http_errors(monkeypatch):
 def test_every_provider_has_a_name_and_a_key_page():
     for name, cls in _PROVIDERS.items():
         assert cls.name == name and cls.display_name, name
-        assert bool(cls.key_url) == cls.requires_key, name  # keyless providers have no key page
+        assert cls.key_mode in ("none", "optional", "required"), name
+        assert bool(cls.key_url) == (cls.key_mode != "none"), name  # keyless: no key page
+        # The one-flag views agree with the tri-state.
+        assert cls.requires_key == (cls.key_mode == "required"), name
+        assert cls.accepts_key == (cls.key_mode == "optional"), name
+    assert DuckDuckGoProvider.key_mode == "none"
+    assert YouProvider.key_mode == "optional"
+    assert TavilyProvider.key_mode == "required"
 
 
 def test_every_provider_is_known_to_the_site_wall():
     """`web_search` has no url argument: the sandbox's allowed-sites wall checks the
     provider's host (PROVIDER_HOSTS), and the Access page offers it under Search."""
     for name in provider_names():
-        host = PROVIDER_HOSTS[name]
-        assert host in SEARCH_APIS, (name, host)
+        hosts = PROVIDER_HOSTS[name]
+        for host in [hosts] if isinstance(hosts, str) else hosts:
+            assert host in SEARCH_APIS, (name, host)
+
+
+def test_build_provider_you_is_keyless_with_optional_key(monkeypatch):
+    monkeypatch.setenv("YDC_API_KEY", "ignored")  # providers never read the environment
+    assert "you" in provider_names()
+    keyless = build_provider("you")  # no key needed
+    assert isinstance(keyless, YouProvider) and keyless.api_key is None
+    assert build_provider("you", "ydc-x").api_key == "ydc-x"  # key is passed through
+
+
+def _you_env(monkeypatch, **values):
+    for var in ("YOU_API_KEY", "YDC_API_KEY"):
+        monkeypatch.delenv(var, raising=False)
+    for var, value in values.items():
+        monkeypatch.setenv(var, value)
+
+
+def test_resolve_provider_reads_the_you_key_from_either_env_name(tmp_path, monkeypatch):
+    from coworker.web import resolve_provider
+
+    secrets = SecretStore(tmp_path / "secrets.json")
+    secrets.put("web_search:default", {"provider": "you"})
+    _you_env(monkeypatch)
+    assert resolve_provider(secrets).api_key is None
+    _you_env(monkeypatch, YDC_API_KEY="from-ydc")  # the name You.com's own docs use
+    assert resolve_provider(secrets).api_key == "from-ydc"
+    _you_env(monkeypatch, YOU_API_KEY="from-you", YDC_API_KEY="from-ydc")
+    assert resolve_provider(secrets).api_key == "from-you"  # the uniform name wins
+    secrets.put("web_search:default", {"provider": "you", "api_key": "from-store"})
+    assert resolve_provider(secrets).api_key == "from-store"  # the store wins over both
+
+
+def test_provider_host_follows_the_you_key(tmp_path, monkeypatch):
+    """You.com talks to one host keyless and another with a key; the site wall checks the
+    one the next search will use."""
+    from coworker.web import provider_host
+
+    secrets = SecretStore(tmp_path / "secrets.json")
+    secrets.put("web_search:default", {"provider": "you"})
+    _you_env(monkeypatch)
+    assert provider_host(secrets) == "api.you.com"
+    _you_env(monkeypatch, YDC_API_KEY="k")
+    assert provider_host(secrets) == "ydc-index.io"
+    _you_env(monkeypatch)
+    secrets.put("web_search:default", {"provider": "you", "api_key": "k"})
+    assert provider_host(secrets) == "ydc-index.io"
+    secrets.put("web_search:default", {"provider": "brave", "api_key": "k"})
+    assert provider_host(secrets) == "api.search.brave.com"  # single-host providers as before
+
+
+def _fake_you_get(captured, payload):
+    """Stand-in for httpx.get that records the request and replays a canned response."""
+
+    class Resp:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return payload
+
+    def get(url, **kw):
+        captured.update(url=url, **kw)
+        return Resp()
+
+    return get
+
+
+def test_you_provider_keyless_request_and_parsing(monkeypatch):
+    import httpx
+
+    monkeypatch.delenv("YDC_API_KEY", raising=False)
+    got = {}
+    monkeypatch.setattr(
+        httpx,
+        "get",
+        _fake_you_get(
+            got,
+            {
+                "results": {
+                    "web": [
+                        {"title": "w", "url": "https://w", "description": "wd"},
+                        {"title": "s", "url": "https://s", "snippets": ["a", "b"]},
+                    ],
+                    "news": [{"title": "n", "url": "https://n", "description": "nd"}],
+                }
+            },
+        ),
+    )
+
+    out = YouProvider().search("openworker", max_results=3)
+    assert got["url"] == YouProvider._KEYLESS_URL  # free tier, no key
+    assert "X-API-Key" not in got["headers"]
+    assert got["headers"]["User-Agent"] == "youdotcom-integration/andrewyng-openworker"
+    assert got["params"] == {"query": "openworker", "count": 3}
+    assert [(r.title, r.url, r.snippet) for r in out] == [
+        ("w", "https://w", "wd"),
+        ("s", "https://s", "a b"),  # falls back to snippets when description is absent
+        ("n", "https://n", "nd"),  # web first, news fills the remainder
+    ]
+
+
+def test_you_provider_with_key_uses_search_api(monkeypatch):
+    import httpx
+
+    got = {}
+    monkeypatch.setattr(httpx, "get", _fake_you_get(got, {"results": {}}))
+
+    assert YouProvider("ydc-123").search("q", max_results=2) == []
+    assert got["url"] == YouProvider._KEYED_URL
+    assert got["headers"]["X-API-Key"] == "ydc-123"
+
+
+def test_you_provider_truncates_to_max_results(monkeypatch):
+    import httpx
+
+    rows = [{"title": f"r{i}", "url": f"https://x/{i}"} for i in range(10)]
+    monkeypatch.setattr(
+        httpx, "get", _fake_you_get({}, {"results": {"web": rows, "news": rows}})
+    )
+    assert len(YouProvider().search("q", max_results=4)) == 4
 
 
 def test_tool_surfaces_missing_key_error(tmp_path):

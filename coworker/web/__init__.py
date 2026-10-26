@@ -11,6 +11,7 @@ from .providers import (
     SerperProvider,
     TavilyProvider,
     WebSearchProvider,
+    YouProvider,
     build_provider,
     provider_names,
 )
@@ -26,6 +27,7 @@ __all__ = [
     "SerperProvider",
     "ExaProvider",
     "FirecrawlProvider",
+    "YouProvider",
     "build_provider",
     "provider_names",
     "make_web_search_tool",
