@@ -321,12 +321,17 @@ MATRIX: dict[str, ModelEntry] = {
     "openrouter:stealth/ox-alpha": ModelEntry(
         "Ox Alpha · via OpenRouter", _AGENTIC, 1_048_576
     ),
-    # OrcaRouter: the same vendor namespaces, one key for all of them (ids + context
-    # windows checked against their catalog/pricing API 2026-08-14).
+    # OrcaRouter: the same vendor namespaces, one key for all of them. Ids, windows and
+    # tool support from api.orcarouter.ai/v1/models (keyless, read 2026-10-25:
+    # `context_length` 1,000,000 and 1,048,576; both list `tools`; Sonnet 5 declares
+    # image input, PDFs unverified over the compat surface).
     "orcarouter:anthropic/claude-sonnet-5": ModelEntry(
-        "Claude Sonnet 5 · via OrcaRouter", _AGENTIC, 1_000_000
+        "Claude Sonnet 5 · via OrcaRouter",
+        ModelCapabilities(
+            tools=True, vision=True, parallel_tool_calls=True, streaming=True
+        ),
+        1_000_000,
     ),
-    "orcarouter:openai/gpt-5.5": ModelEntry("GPT-5.5 · via OrcaRouter", _AGENTIC),
     "orcarouter:deepseek/deepseek-v4-pro": ModelEntry(
         "DeepSeek V4 Pro · via OrcaRouter", _AGENTIC, 1_048_576
     ),

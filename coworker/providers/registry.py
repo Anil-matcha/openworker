@@ -742,7 +742,6 @@ DESCRIPTORS: list[ProviderDescriptor] = [
         base_url="https://api.orcarouter.ai/v1",
         recommended_model="anthropic/claude-sonnet-5",
         env_key="ORCAROUTER_API_KEY",
-        endpoint_help="Keys start with sk-orca-; get one at orcarouter.ai.",
     ),
     ProviderDescriptor(
         name="ollama",
