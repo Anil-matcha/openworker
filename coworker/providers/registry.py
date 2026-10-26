@@ -718,9 +718,8 @@ DESCRIPTORS: list[ProviderDescriptor] = [
         endpoint_help="Prefilled with Novita's OpenAI-compatible endpoint; keep it unless you use a regional or proxy variant.",
     ),
     # Resellers: many labs' models behind one key, using THEIR model namespaces (the curated
-    # ids + display labels live in providers/matrix.py). TODO: add Groq here (+ its matrix
-    # rows) once the current provider surface is tested — deliberately deferred to bound
-    # how much needs verifying at once (owner call, 2026-07-04).
+    # ids + display labels live in providers/matrix.py). Groq was deferred on 2026-07-04 to
+    # bound how much needed verifying at once; it landed 2026-10-25 with verified rows.
     _compat(
         "together",
         "Together AI",
@@ -779,6 +778,13 @@ DESCRIPTORS: list[ProviderDescriptor] = [
         recommended_model="nvidia/nemotron-3-super-120b-a12b",
         env_key="NVIDIA_API_KEY",
         endpoint_help="Prefilled with NVIDIA's hosted NIM endpoint. Point it at a self-hosted NIM container (e.g. http://localhost:8000/v1) to use your own deployment.",
+    ),
+    _compat(
+        "groq",
+        "Groq",
+        base_url="https://api.groq.com/openai/v1",
+        recommended_model="llama-3.3-70b-versatile",
+        env_key="GROQ_API_KEY",
     ),
     ProviderDescriptor(
         name="ollama",

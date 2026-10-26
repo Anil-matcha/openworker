@@ -16,9 +16,8 @@ where the vendor spec wasn't re-checked stay ``None`` — the meter simply hides
 showing a made-up denominator. Values entered 2026-07-28 from vendor docs; verify alongside
 the id refresh.
 
-Resellers: Together + Fireworks + OpenRouter + Nebius + OrcaRouter + NVIDIA NIM. TODO: add Groq entries here AND its
-descriptor in ``registry.py`` once the current provider surface is tested — deliberately
-deferred to bound how much needs verifying at once.
+Resellers: Together + Fireworks + OpenRouter + Nebius + OrcaRouter + NVIDIA NIM
++ Groq (landed 2026-10-25, after the deferral of 2026-07-04).
 """
 
 from __future__ import annotations
@@ -441,6 +440,28 @@ MATRIX: dict[str, ModelEntry] = {
     "nebius:zai-org/GLM-5.2": ModelEntry("GLM-5.2 · via Nebius", _AGENTIC, 1_048_576),
     "nebius:deepseek-ai/DeepSeek-V4-Pro": ModelEntry(
         "DeepSeek V4 Pro · via Nebius", _AGENTIC, 1_048_576
+    ),
+    # -- Groq (LPU inference) ---------------------------------------------------
+    # Groq keeps its own short ids. Rows and windows from console.groq.com/docs/models
+    # (production table, read 2026-10-25: 131,072 context each; the earlier Maverick,
+    # R1-distill and QwQ ids are no longer listed). console.groq.com/docs/tool-use (same
+    # day): all three take tools; only Llama 3.3 does parallel tool use.
+    "groq:llama-3.3-70b-versatile": ModelEntry(
+        "Llama 3.3 70B Versatile · via Groq", _AGENTIC, 131_072
+    ),
+    "groq:openai/gpt-oss-120b": ModelEntry(
+        "GPT-OSS 120B · via Groq",
+        ModelCapabilities(
+            tools=True, vision=False, parallel_tool_calls=False, streaming=True
+        ),
+        131_072,
+    ),
+    "groq:openai/gpt-oss-20b": ModelEntry(
+        "GPT-OSS 20B · via Groq",
+        ModelCapabilities(
+            tools=True, vision=False, parallel_tool_calls=False, streaming=True
+        ),
+        131_072,
     ),
 }
 

@@ -508,6 +508,7 @@ def test_matrix_answers_capabilities_for_reseller_ids():
         # NIM ids are `vendor/model`, so NVIDIA's own models repeat the word in the
         # routed id. Deliberate: the `z-ai/` and `deepseek-ai/` rows in matrix.py don't.
         "nvidia:nvidia/nemotron-3-super-120b-a12b",
+        "groq:llama-3.3-70b-versatile",
     ):
         caps = capabilities_for(mid)
         assert caps.tools and caps.parallel_tool_calls and caps.streaming
@@ -568,6 +569,15 @@ def test_matrix_labels_and_custom_model_fallback():
     assert caps.tools and not caps.parallel_tool_calls
 
 
+def test_groq_gpt_oss_rows_do_not_claim_parallel_tool_calls():
+    """console.groq.com/docs/tool-use (2026-10-25): GPT-OSS on Groq takes tools but not
+    parallel tool use; Llama 3.3 70B does both."""
+    assert capabilities_for("groq:llama-3.3-70b-versatile").parallel_tool_calls
+    for mid in ("groq:openai/gpt-oss-120b", "groq:openai/gpt-oss-20b"):
+        caps = capabilities_for(mid)
+        assert caps.tools and not caps.parallel_tool_calls
+
+
 def test_reseller_descriptors_and_matrix_stay_in_lockstep():
     """Reseller suggested models derive from the matrix, and each descriptor's
     recommended model must be one of them (set_provider's auto-add depends on it)."""
@@ -576,7 +586,7 @@ def test_reseller_descriptors_and_matrix_stay_in_lockstep():
 
     for name in (
         "together", "fireworks", "openrouter", "nebius", "orcarouter", "sambanova",
-        "novita",
+        "novita", "groq",
     ):
         d = get_descriptor(name)
         assert d is not None and d.needs_key
