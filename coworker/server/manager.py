@@ -4165,9 +4165,10 @@ class SessionManager:
         "qwen": ["qwen3-max", "qwen3-coder-plus", "qwen-plus"],
         "xai": ["grok-4.3", "grok-4"],
         "mistral": ["mistral-large-latest", "mistral-small-latest"],
-        # NIM ids carry their own `vendor/model` namespace; both probed 2026-07-25.
+        # NIM ids carry their own `vendor/model` namespace (integrate.api.nvidia.com/v1/models,
+        # read 2026-10-25).
         "nvidia": [
-            "nvidia/llama-3.3-nemotron-super-49b-v1.5",
+            "nvidia/nemotron-3-super-120b-a12b",
             "nvidia/nemotron-3-ultra-550b-a55b",
         ],
     }

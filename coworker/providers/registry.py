@@ -759,7 +759,7 @@ DESCRIPTORS: list[ProviderDescriptor] = [
         "nvidia",
         "NVIDIA NIM",
         base_url="https://integrate.api.nvidia.com/v1",
-        recommended_model="nvidia/llama-3.3-nemotron-super-49b-v1.5",
+        recommended_model="nvidia/nemotron-3-super-120b-a12b",
         env_key="NVIDIA_API_KEY",
         endpoint_help="Prefilled with NVIDIA's hosted NIM endpoint. Point it at a self-hosted NIM container (e.g. http://localhost:8000/v1) to use your own deployment.",
     ),
@@ -1168,21 +1168,30 @@ def verify_provider_key(
             # one, so the usual list-models probe can't tell a good key from a typo. Auth
             # is enforced only on inference — and only once the model id routes (a bad
             # model 404s before the key is looked at) — so we spend a single token on the
-            # recommended model instead.
+            # recommended model instead. A self-hosted NIM (any other endpoint) serves one
+            # model of its own choosing, so the recommended id would 404 there; its
+            # /v1/models is behind the key, so the plain listing is the right probe.
             default_base = next(
                 (f.default for f in d.fields if f.key == "base_url" and f.default), ""
             )
             base = (base_url or "").strip().rstrip("/") or default_base.rstrip("/")
-            resp = httpx.post(
-                base + "/chat/completions",
-                headers={"Authorization": f"Bearer {key}"},
-                json={
-                    "model": d.recommended_model,
-                    "messages": [{"role": "user", "content": "hi"}],
-                    "max_tokens": 1,
-                },
-                timeout=timeout,
-            )
+            if base != default_base.rstrip("/"):
+                resp = httpx.get(
+                    base + "/models",
+                    headers={"Authorization": f"Bearer {key}"},
+                    timeout=timeout,
+                )
+            else:
+                resp = httpx.post(
+                    base + "/chat/completions",
+                    headers={"Authorization": f"Bearer {key}"},
+                    json={
+                        "model": d.recommended_model,
+                        "messages": [{"role": "user", "content": "hi"}],
+                        "max_tokens": 1,
+                    },
+                    timeout=timeout,
+                )
         elif name in ("ark", "ark-agent-plan-cn"):
             default_base = next(
                 (f.default for f in d.fields if f.key == "base_url" and f.default), ""
