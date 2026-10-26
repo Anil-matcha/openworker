@@ -290,6 +290,7 @@ COMPAT_VENDORS = {
     "xai": "https://api.x.ai/v1",
     "mistral": "https://api.mistral.ai/v1",
     "nvidia": "https://integrate.api.nvidia.com/v1",
+    "atlascloud": "https://api.atlascloud.ai/v1",
 }
 
 
@@ -470,6 +471,7 @@ def test_compat_models_route_and_get_tool_capabilities():
         "xai:grok-4.3",
         "mistral:mistral-large-latest",
         "orcarouter:anthropic/claude-sonnet-5",
+        "atlascloud:zai-org/glm-5.2",
     ):
         prefix = model.split(":", 1)[0]
         assert router._provider_name(model) == prefix
@@ -572,7 +574,9 @@ def test_reseller_descriptors_and_matrix_stay_in_lockstep():
     from coworker.providers.matrix import models_for_provider
     from coworker.providers.registry import get_descriptor
 
-    for name in ("together", "fireworks", "openrouter", "nebius", "orcarouter"):
+    for name in (
+        "together", "fireworks", "openrouter", "nebius", "orcarouter", "sambanova"
+    ):
         d = get_descriptor(name)
         assert d is not None and d.needs_key
         curated = models_for_provider(name)

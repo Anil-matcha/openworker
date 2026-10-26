@@ -216,6 +216,27 @@ MATRIX: dict[str, ModelEntry] = {
     "mistral:mistral-large-latest": ModelEntry(
         "Mistral Large · Mistral", _AGENTIC, 128_000
     ),
+    # -- SambaNova ---------------------------------------------------------------
+    # SambaCloud's OpenAI-compatible API; ids and windows are the `context_length` values
+    # api.sambanova.ai/v1/models reports (keyless, read 2026-10-25). The two 128k rows are
+    # the production tier on docs.sambanova.ai/docs/en/models/sambacloud-models; MiniMax
+    # M3.1 Flash is what the catalogue serves today in place of the M2.7/M3 previews.
+    "sambanova:Meta-Llama-3.3-70B-Instruct": ModelEntry(
+        "Llama 3.3 70B · SambaNova", _AGENTIC, 131_072
+    ),
+    "sambanova:DeepSeek-V3.1": ModelEntry(
+        "DeepSeek V3.1 · SambaNova", _AGENTIC, 131_072
+    ),
+    "sambanova:MiniMax-M3.1-Flash": ModelEntry(
+        "MiniMax M3.1 Flash · SambaNova", _AGENTIC, 1_048_576
+    ),
+    # Atlas Cloud fronts open-weight models under each lab's namespace. Id and window
+    # from api.atlascloud.ai/v1/models (keyless, read 2026-10-25: `context_length`
+    # 1,048,576, `supported_features` lists tools); the earlier openai/gpt-4.1-mini row is
+    # not in its catalogue any more.
+    "atlascloud:zai-org/glm-5.2": ModelEntry(
+        "GLM-5.2 · via Atlas Cloud", _AGENTIC, 1_048_576
+    ),
     # -- resellers (their model namespaces, verbatim) -----------------------------
     "together:thinkingmachines/Inkling": ModelEntry("Inkling · via Together"),
     # Together windows below are the `context_length` values its /v1/models catalog
