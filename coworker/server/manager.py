@@ -4354,6 +4354,11 @@ class SessionManager:
         ],
         "atlascloud": ["zai-org/glm-5.2"],
         "upstage": ["solar-pro4", "solar-mini4"],
+        # Verified 2026-10-26 (sources in providers/matrix.py).
+        "cerebras": ["gpt-oss-120b"],
+        "huggingface": ["zai-org/GLM-5.2"],
+        "cohere": ["command-a-plus-05-2026"],
+        "siliconflow": ["zai-org/GLM-5.2"],
     }
 
     def _suggested_models(self, name: str) -> list[str]:

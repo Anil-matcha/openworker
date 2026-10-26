@@ -113,6 +113,11 @@ export const PROVIDER_ORDER = [
   "novita",
   "groq",
   "upstage",
+  // No vendored marks yet for these four: the gallery shows the neutral monogram.
+  "cerebras",
+  "huggingface",
+  "cohere",
+  "siliconflow",
 ];
 
 export function providerRank(name: string): number {

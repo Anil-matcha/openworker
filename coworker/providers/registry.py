@@ -842,6 +842,41 @@ DESCRIPTORS: list[ProviderDescriptor] = [
         recommended_model="llama-3.3-70b-versatile",
         env_key="GROQ_API_KEY",
     ),
+    # Four more OpenAI-compatible vendors (2026-10-26); endpoints, key pages and the
+    # recommended ids read from each vendor's docs that day (sources in matrix.py).
+    _compat(
+        "cerebras",
+        "Cerebras",
+        base_url="https://api.cerebras.ai/v1",
+        recommended_model="gpt-oss-120b",
+        env_key="CEREBRAS_API_KEY",
+    ),
+    # Hugging Face routes each repo id to one of its partner providers; model ids are
+    # the Hub repo ids, optionally with a `:provider` suffix to pin one.
+    _compat(
+        "huggingface",
+        "Hugging Face (Inference Providers)",
+        base_url="https://router.huggingface.co/v1",
+        recommended_model="zai-org/GLM-5.2",
+        env_key="HF_TOKEN",
+        endpoint_help="Prefilled with the Inference Providers router. Model ids are Hugging Face repo ids, e.g. zai-org/GLM-5.2.",
+    ),
+    _compat(
+        "cohere",
+        "Cohere",
+        base_url="https://api.cohere.ai/compatibility/v1",
+        recommended_model="command-a-plus-05-2026",
+        env_key="COHERE_API_KEY",
+        endpoint_help="Prefilled with Cohere's Compatibility API, which speaks the OpenAI chat format.",
+    ),
+    _compat(
+        "siliconflow",
+        "SiliconFlow",
+        base_url="https://api.siliconflow.com/v1",
+        recommended_model="zai-org/GLM-5.2",
+        env_key="SILICONFLOW_API_KEY",
+        endpoint_help="Prefilled with SiliconFlow's international endpoint. China mainland: https://api.siliconflow.cn/v1 (keys from cloud.siliconflow.cn).",
+    ),
     ProviderDescriptor(
         name="ollama",
         title="Ollama",
