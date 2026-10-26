@@ -57,6 +57,7 @@ PROVIDER_HOSTS = {
     "duckduckgo": "duckduckgo.com",
     "tavily": "api.tavily.com",
     "brave": "api.search.brave.com",
+    "serper": "google.serper.dev",
 }
 
 

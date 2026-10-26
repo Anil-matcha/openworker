@@ -1,8 +1,8 @@
 """Web search providers — a keyless default + pluggable third-party services.
 
-`duckduckgo` works with no API key (our "starting version of our own"). `tavily` and `brave`
-give better results but need a key (configured via the SecretStore / env). All providers
-return a uniform `list[SearchResult]`; the heavy client libs are lazy-imported.
+`duckduckgo` works with no API key (our "starting version of our own"). `tavily`, `brave` and
+`serper` give better results but need a key (configured via the SecretStore / env). All
+providers return a uniform `list[SearchResult]`; the heavy client libs are lazy-imported.
 """
 
 from __future__ import annotations
@@ -26,6 +26,10 @@ class SearchResult:
 
 class WebSearchProvider(ABC):
     name: str = "base"
+    # What Settings shows for this provider, and where a person gets a key (empty when the
+    # provider is keyless).
+    display_name: str = ""
+    key_url: str = ""
     requires_key: bool = False
 
     @abstractmethod
@@ -36,6 +40,7 @@ class DuckDuckGoProvider(WebSearchProvider):
     """Keyless default via the `ddgs` library."""
 
     name = "duckduckgo"
+    display_name = "DuckDuckGo"
     requires_key = False
 
     def search(self, query: str, max_results: int = 5) -> list[SearchResult]:
@@ -54,6 +59,8 @@ class DuckDuckGoProvider(WebSearchProvider):
 
 class TavilyProvider(WebSearchProvider):
     name = "tavily"
+    display_name = "Tavily"
+    key_url = "https://tavily.com"
     requires_key = True
 
     def __init__(self, api_key: str) -> None:
@@ -67,6 +74,7 @@ class TavilyProvider(WebSearchProvider):
             json={"api_key": self.api_key, "query": query, "max_results": max_results},
             timeout=_TIMEOUT,
         )
+        resp.raise_for_status()
         data = resp.json()
         return [
             SearchResult(
@@ -80,6 +88,8 @@ class TavilyProvider(WebSearchProvider):
 
 class BraveProvider(WebSearchProvider):
     name = "brave"
+    display_name = "Brave Search"
+    key_url = "https://brave.com/search/api"
     requires_key = True
 
     def __init__(self, api_key: str) -> None:
@@ -97,6 +107,7 @@ class BraveProvider(WebSearchProvider):
             params={"q": query, "count": max_results},
             timeout=_TIMEOUT,
         )
+        resp.raise_for_status()
         data = resp.json()
         return [
             SearchResult(
@@ -108,10 +119,48 @@ class BraveProvider(WebSearchProvider):
         ]
 
 
+class SerperProvider(WebSearchProvider):
+    """Google search results via serper.dev — $0.001/search, 2500 free searches.
+
+    POSTs to the Serper API and maps organic results into uniform SearchResult
+    items. Requires a key from https://serper.dev (free tier includes 2500 searches
+    with no time limit).
+    """
+
+    name = "serper"
+    display_name = "Serper"
+    key_url = "https://serper.dev"
+    requires_key = True
+
+    def __init__(self, api_key: str) -> None:
+        self.api_key = api_key
+
+    def search(self, query: str, max_results: int = 5) -> list[SearchResult]:
+        import httpx
+
+        resp = httpx.post(
+            "https://google.serper.dev/search",
+            headers={"X-API-KEY": self.api_key},
+            json={"q": query, "num": max_results},
+            timeout=_TIMEOUT,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        return [
+            SearchResult(
+                title=r.get("title", ""),
+                url=r.get("link", ""),
+                snippet=r.get("snippet", ""),
+            )
+            for r in data.get("organic", [])
+        ]
+
+
 _PROVIDERS = {
     "duckduckgo": DuckDuckGoProvider,
     "tavily": TavilyProvider,
     "brave": BraveProvider,
+    "serper": SerperProvider,
 }
 
 

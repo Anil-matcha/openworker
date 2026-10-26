@@ -19,8 +19,8 @@ max_iterations = 12          # max model<->tool iterations per turn before stopp
                              # default (Anthropic high, Kimi K3 max). Env override:
                              # COWORKER_REASONING_EFFORT.
 
-# Web search backend: "duckduckgo" (keyless, default) | "tavily" | "brave"
-# (the latter two need an API key, set in the app's Settings or secret store).
+# Web search backend: "duckduckgo" (keyless, default) | "tavily" | "brave" | "serper"
+# (the keyed ones need an API key, set in the app's Settings or secret store).
 web_search_provider = "duckduckgo"
 
 # Commands auto-allowed without an approval prompt (prefix match).

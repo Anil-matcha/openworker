@@ -1,13 +1,14 @@
 """Tests for web search — provider abstraction, the tool, and config resolution.
 
 No network: a FakeProvider is injected; third-party key handling and the REST config path
-are exercised without hitting DuckDuckGo/Tavily/Brave.
+are exercised without hitting DuckDuckGo/Tavily/Brave/Serper.
 """
 
 from __future__ import annotations
 
 import pytest
 
+from coworker.sandbox.network_profiles import SEARCH_APIS
 from coworker.secrets import SecretStore
 from coworker.web import (
     SearchResult,
@@ -16,11 +17,14 @@ from coworker.web import (
     provider_names,
 )
 from coworker.web.providers import (
+    _PROVIDERS,
     BraveProvider,
     DuckDuckGoProvider,
+    SerperProvider,
     TavilyProvider,
     WebSearchProvider,
 )
+from coworker.web.tool import PROVIDER_HOSTS
 
 
 class FakeProvider(WebSearchProvider):
@@ -77,8 +81,81 @@ def test_build_provider_default_is_keyless_duckduckgo():
 def test_build_provider_third_party_requires_key():
     with pytest.raises(ValueError):
         build_provider("tavily")  # no key
+    with pytest.raises(ValueError):
+        build_provider("serper")  # no key
     assert isinstance(build_provider("tavily", "tvly-x"), TavilyProvider)
     assert isinstance(build_provider("brave", "brv-x"), BraveProvider)
+    assert isinstance(build_provider("serper", "srp-x"), SerperProvider)
+    assert "serper" in provider_names()
+
+
+def test_serper_sends_correct_request_and_maps_organic_results(monkeypatch):
+    """Verify the Serper API request shape and response mapping without a network call."""
+    import httpx
+
+    sent = {}
+
+    class _Resp:
+        @staticmethod
+        def raise_for_status():
+            pass
+
+        @staticmethod
+        def json():
+            return {
+                "organic": [
+                    {
+                        "title": "Example Title",
+                        "link": "https://example.com",
+                        "snippet": "An example snippet.",
+                    }
+                ]
+            }
+
+    def fake_post(url, **kwargs):
+        sent.update(url=url, **kwargs)
+        return _Resp()
+
+    monkeypatch.setattr(httpx, "post", fake_post)
+
+    results = build_provider("serper", "srp-test-key").search("anthropic", max_results=3)
+
+    assert sent["url"] == "https://google.serper.dev/search"
+    assert sent["headers"]["X-API-KEY"] == "srp-test-key"
+    assert sent["json"]["q"] == "anthropic"
+    assert sent["json"]["num"] == 3
+    assert len(results) == 1
+    assert results[0].title == "Example Title"
+    assert results[0].url == "https://example.com"
+    assert results[0].snippet == "An example snippet."
+
+
+def test_keyed_providers_raise_on_http_errors(monkeypatch):
+    """A 401/429/5xx surfaces as an error instead of an empty result list."""
+    import httpx
+
+    def denied(url, **kwargs):
+        return httpx.Response(401, request=httpx.Request("POST", url))
+
+    monkeypatch.setattr(httpx, "post", denied)
+    monkeypatch.setattr(httpx, "get", denied)
+    for provider in (TavilyProvider("k"), BraveProvider("k"), SerperProvider("k")):
+        with pytest.raises(httpx.HTTPStatusError):
+            provider.search("q")
+
+
+def test_every_provider_has_a_name_and_a_key_page():
+    for name, cls in _PROVIDERS.items():
+        assert cls.name == name and cls.display_name, name
+        assert bool(cls.key_url) == cls.requires_key, name  # keyless providers have no key page
+
+
+def test_every_provider_is_known_to_the_site_wall():
+    """`web_search` has no url argument: the sandbox's allowed-sites wall checks the
+    provider's host (PROVIDER_HOSTS), and the Access page offers it under Search."""
+    for name in provider_names():
+        host = PROVIDER_HOSTS[name]
+        assert host in SEARCH_APIS, (name, host)
 
 
 def test_tool_surfaces_missing_key_error(tmp_path):
