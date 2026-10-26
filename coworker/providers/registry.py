@@ -26,6 +26,7 @@ from .anthropic_provider import AnthropicProvider
 from .base import ProviderClient
 from .bedrock_provider import BedrockProvider
 from .gemini_provider import GeminiProvider
+from .local_server import LOCAL_SERVERS
 from .openai_provider import OpenAIProvider
 from .openai_responses import OpenAIResponsesProvider
 from .vertex_provider import VertexProvider
@@ -214,7 +215,8 @@ def _build_ollama(profile: dict[str, Any], secrets: Any) -> ProviderClient:
 
 
 def _local_server(name: str):
-    """Builder for llama.cpp, vLLM and LM Studio (providers/local_server.py): the user's own server,
+    """Builder for the OpenAI-compatible local servers (providers/local_server.py: llama.cpp,
+    vLLM, LM Studio, Jan, Docker Model Runner, mlx-lm): the user's own server,
     reached through its `/v1`, with an optional key. Without a key the server takes any
     value, so a placeholder goes out."""
     from .local_server import PLACEHOLDER_KEY, remember_server, thinking_as_template_kwargs, v1_base
@@ -936,6 +938,88 @@ DESCRIPTORS: list[ProviderDescriptor] = [
         blurb="The LM Studio app's local server, with whatever models you downloaded there.",
         kind="local",
     ),
+    # Three more OpenAI-compatible local servers (2026-10-26). Defaults read from each
+    # tool's own docs: docs.jan.ai/desktop/api-server (127.0.0.1:1337, /v1 prefix),
+    # docs.docker.com/ai/model-runner/api-reference (localhost:12434/engines/v1),
+    # mlx-lm's server.py (127.0.0.1:8080). No recommended model: each serves whatever the
+    # user loaded, and the picker lists that.
+    ProviderDescriptor(
+        name="jan",
+        title="Jan",
+        needs_key=False,
+        fields=[
+            ProviderField(
+                "base_url",
+                "Server address",
+                secret=False,
+                required=False,
+                placeholder="http://127.0.0.1:1337",
+                help="Where Jan's local API server is listening (Settings ▸ Local API Server ▸ "
+                "Start Server). The /v1 path is added automatically.",
+            ),
+            ProviderField(
+                "api_key",
+                "API key (only if you set one in Jan's server settings)",
+                secret=True,
+                required=False,
+            ),
+        ],
+        build=_local_server("jan"),
+        blurb="The Jan app's local API server, with the models you downloaded there.",
+        kind="local",
+    ),
+    ProviderDescriptor(
+        name="docker",
+        title="Docker Model Runner",
+        needs_key=False,
+        fields=[
+            ProviderField(
+                "base_url",
+                "Server address",
+                secret=False,
+                required=False,
+                placeholder="http://localhost:12434/engines",
+                help="Docker Model Runner's TCP address (enable it in Docker Desktop ▸ Settings ▸ "
+                "AI, or `docker desktop enable model-runner --tcp 12434`). The /engines/v1 path "
+                "is added automatically.",
+            ),
+            ProviderField(
+                "api_key",
+                "API key (only if the runner was started with one)",
+                secret=True,
+                required=False,
+            ),
+        ],
+        build=_local_server("docker"),
+        blurb="Models pulled with `docker model pull`, served by Docker Desktop.",
+        kind="local",
+    ),
+    ProviderDescriptor(
+        name="mlx",
+        title="mlx-lm",
+        needs_key=False,
+        fields=[
+            ProviderField(
+                "base_url",
+                "Server address",
+                secret=False,
+                required=False,
+                placeholder="http://127.0.0.1:8080",
+                help="Where `mlx_lm.server` is listening. It defaults to port 8080, the same as "
+                "llama.cpp — if you run both, start one on another port "
+                "(`mlx_lm.server --port 8081`). The /v1 path is added automatically.",
+            ),
+            ProviderField(
+                "api_key",
+                "API key (only if the server was started with one)",
+                secret=True,
+                required=False,
+            ),
+        ],
+        build=_local_server("mlx"),
+        blurb="An mlx-lm server on Apple silicon (`pip install mlx-lm`, then `mlx_lm.server --model <repo>`).",
+        kind="local",
+    ),
 ]
 
 _BY_NAME = {d.name: d for d in DESCRIPTORS}
@@ -1319,7 +1403,7 @@ def verify_provider_key(
         elif name == "ollama":
             base = _normalize_ollama_url(base_url)
             resp = httpx.get(base.rstrip("/") + "/models", timeout=timeout)
-        elif name in ("llamacpp", "vllm", "lmstudio"):
+        elif name in LOCAL_SERVERS:
             from .local_server import v1_base
 
             headers = {"Authorization": f"Bearer {key}"} if key else {}

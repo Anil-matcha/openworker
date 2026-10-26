@@ -87,6 +87,11 @@ export const PROVIDER_ORDER = [
   "llamacpp",
   "vllm",
   "lmstudio",
+  // Jan, Docker Model Runner and mlx-lm carry no mark yet: the gallery shows the
+  // neutral monogram (see ProviderMark).
+  "jan",
+  "docker",
+  "mlx",
   "bedrock",
   "vertex",
   "openrouter",

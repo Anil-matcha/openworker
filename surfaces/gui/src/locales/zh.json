@@ -1606,7 +1606,13 @@
     "vllm_desc": "vLLM 运行在带 NVIDIA GPU 的 Linux 上。仅当服务器启动时设置了密钥才需要填写。",
     "install_vllm": "安装 vLLM",
     "lmstudio_desc": "LM Studio 应用会提供你在其中下载的模型。仅当你在应用中开启了密钥才需要填写。",
-    "install_lmstudio": "安装 LM Studio"
+    "install_lmstudio": "安装 LM Studio",
+    "jan_desc": "开启 Jan 的本地 API 服务器后（设置 ▸ Local API Server ▸ Start Server），Jan 应用会提供你在其中下载的模型。仅当你在那里设置了密钥才需要填写。",
+    "install_jan": "设置 Jan 的 API 服务器",
+    "docker_desc": "Docker Desktop 会提供你用 `docker model pull hf.co/<repo>:<quant>` 拉取的模型。请在 Docker Desktop ▸ Settings ▸ AI 中开启 Model Runner 及其 TCP 访问。无需密钥。",
+    "install_docker": "设置 Docker Model Runner",
+    "mlx_desc": "mlx-lm 运行在 Apple 芯片上：`pip install mlx-lm`，然后 `mlx_lm.server --model <repo>`。它与 llama.cpp 同样使用 8080 端口——如果两者都运行，请让其中一个使用其他端口，例如 `mlx_lm.server --port 8081`。",
+    "install_mlx": "设置 mlx-lm"
   },
   "workspace_trust": {
     "title": "信任此工作区的命令？",

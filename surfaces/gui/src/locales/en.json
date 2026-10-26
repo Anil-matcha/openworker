@@ -1626,7 +1626,13 @@
     "vllm_desc": "vLLM runs on Linux with an NVIDIA GPU. A key is needed only if the server was started with one.",
     "install_vllm": "Install vLLM",
     "lmstudio_desc": "The LM Studio app serves the models you downloaded there. A key is needed only if you turned one on in the app.",
-    "install_lmstudio": "Install LM Studio"
+    "install_lmstudio": "Install LM Studio",
+    "jan_desc": "The Jan app serves the models you downloaded there once its local API server is on (Settings ▸ Local API Server ▸ Start Server). A key is needed only if you set one there.",
+    "install_jan": "Set up Jan's API server",
+    "docker_desc": "Docker Desktop serves models you pulled with `docker model pull hf.co/<repo>:<quant>`. Turn on Model Runner and its TCP access in Docker Desktop ▸ Settings ▸ AI. No key needed.",
+    "install_docker": "Set up Docker Model Runner",
+    "mlx_desc": "mlx-lm runs on Apple silicon: `pip install mlx-lm`, then `mlx_lm.server --model <repo>`. It uses port 8080 like llama.cpp — if you run both, start one on another port, e.g. `mlx_lm.server --port 8081`.",
+    "install_mlx": "Set up mlx-lm"
   },
   "workspace_trust": {
     "title": "Trust this workspace’s commands?",

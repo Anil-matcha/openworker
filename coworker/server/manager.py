@@ -91,6 +91,7 @@ from ..providers import (
     provider_descriptors,
     verify_provider_key,
 )
+from ..providers.local_server import LOCAL_SERVERS
 from ..providers.registry import CUSTOM_PROVIDERS_PROFILE
 from ..secrets import SecretStore, state_dir
 from ..sessions import SessionRecord, usage_totals
@@ -4361,7 +4362,7 @@ class SessionManager:
         topped up with the compat-vendor extras the matrix doesn't vouch for."""
         if name == "ollama":
             return [m.split(":", 1)[-1] for m in self._ollama_models()]
-        if name in ("llamacpp", "vllm", "lmstudio"):
+        if name in LOCAL_SERVERS:
             return [m.split(":", 1)[-1] for m in self._local_server_models(name)]
         from ..providers.matrix import models_for_provider
 
@@ -4430,7 +4431,7 @@ class SessionManager:
         if rec and rec in suggested:
             # OpenAI models stay bare (the router's default); others carry their prefix.
             added = rec if name == "openai" else f"{name}:{rec}"
-        elif name in ("ollama", "llamacpp", "vllm", "lmstudio") and suggested:
+        elif (name == "ollama" or name in LOCAL_SERVERS) and suggested:
             # A local server offers whatever the user loaded — the recommended model may
             # not be one.
             added = f"{name}:{suggested[0]}"
@@ -4701,7 +4702,7 @@ class SessionManager:
         return {"provider": name, "models": [], "error": "no local model list for this provider"}
 
     def _local_server_alive(self, name: str) -> bool:
-        """Best-effort liveness of a llama.cpp, vLLM or LM Studio server, cached 30 s like Ollama's."""
+        """Best-effort liveness of an OpenAI-compatible local server (local_server.LOCAL_SERVERS), cached 30 s like Ollama's."""
         import time
 
         from ..providers import local_server
@@ -4718,7 +4719,7 @@ class SessionManager:
         return alive
 
     def _local_server_models(self, name: str) -> list[str]:
-        """The model ids a llama.cpp, vLLM or LM Studio server serves, as `<name>:<id>`; empty when
+        """The model ids a local server (local_server.LOCAL_SERVERS) serves, as `<name>:<id>`; empty when
         it does not answer or was started without tool calling."""
         from ..providers import local_server
 
@@ -4742,7 +4743,7 @@ class SessionManager:
         provider = self._model_provider(model)
         if provider == "ollama":
             return self._ollama_alive()
-        if provider in ("llamacpp", "vllm", "lmstudio"):
+        if provider in LOCAL_SERVERS:
             return self._local_server_alive(provider)
         return self._provider_configured(provider)
 
@@ -4975,7 +4976,7 @@ class SessionManager:
         # Pulled Ollama models are offered live while Ollama answers — no need to add each one.
         if self._ollama_alive():
             selectable = list(dict.fromkeys([*selectable, *self._ollama_models()]))
-        for local in ("llamacpp", "vllm", "lmstudio"):
+        for local in LOCAL_SERVERS:
             if self.secrets.get(f"provider:{local}") and self._local_server_alive(local):
                 selectable = list(dict.fromkeys([*selectable, *self._local_server_models(local)]))
         if self.model not in selectable:

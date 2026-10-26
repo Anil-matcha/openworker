@@ -1,8 +1,10 @@
-# llama.cpp, vLLM and LM Studio
+# llama.cpp, vLLM, LM Studio, Jan, Docker Model Runner and mlx-lm
 
 OpenWorker can use a model served by [llama.cpp](https://github.com/ggml-org/llama.cpp),
-[vLLM](https://github.com/vllm-project/vllm) or [LM Studio](https://lmstudio.ai), on this
-computer or on another machine. Each is its own provider in Settings ▸ Models & Keys, under "On your own hardware", next
+[vLLM](https://github.com/vllm-project/vllm), [LM Studio](https://lmstudio.ai),
+[Jan](https://jan.ai), [Docker Model Runner](https://docs.docker.com/ai/model-runner/) or
+[mlx-lm](https://github.com/ml-explore/mlx-lm), on this computer or on another machine.
+Each is its own provider in Settings ▸ Models & Keys, under "On your own hardware", next
 to Ollama. Give it the server's address and, only if the server was started with one, its
 API key. OpenWorker reads the rest from the server.
 
@@ -57,9 +59,50 @@ first request names it.
 
 The default address is `http://localhost:1234`.
 
+## Jan
+
+Download a model in the Jan app, then go to Settings ▸ Local API Server, pick the model
+and click Start Server. Jan listens on `127.0.0.1:1337` and serves the OpenAI API under
+`/v1`.
+
+- A key is needed only if you set one in the server's configuration.
+
+The default address is `http://127.0.0.1:1337`.
+
+## Docker Model Runner
+
+Turn on Model Runner in Docker Desktop (Settings ▸ AI), with TCP host access, then pull a
+model:
+
+```bash
+docker model pull hf.co/<repo>:<quant>
+```
+
+- The OpenAI API is served under `/engines/v1` on port 12434; typing
+  `http://localhost:12434` or `http://localhost:12434/engines` both work.
+- The model's id is the name you pulled (`hf.co/...` or `ai/...`).
+
+The default address is `http://localhost:12434/engines`.
+
+## mlx-lm
+
+mlx-lm runs on Apple silicon:
+
+```bash
+pip install mlx-lm
+mlx_lm.server --model mlx-community/<repo>
+```
+
+- It listens on `127.0.0.1:8080`, the same port as llama.cpp. If you run both, start one
+  of them on another port, for example `mlx_lm.server --port 8081`, and type that address.
+- The model's id is the repo you started it with.
+
+The default address is `http://127.0.0.1:8080`.
+
 ## In the CLI
 
-The model id is `llamacpp:<id>`, `vllm:<id>` or `lmstudio:<id>`:
+The model id is `<provider>:<id>` — `llamacpp:<id>`, `vllm:<id>`, `lmstudio:<id>`,
+`jan:<id>`, `docker:<id>` or `mlx:<id>`:
 
 ```bash
 openworker run --model llamacpp:my-model --prompt "..."

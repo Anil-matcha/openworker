@@ -29,6 +29,9 @@ const LOCAL_HELP: Record<string, { desc: string; link: string; url: string }> = 
   llamacpp: { desc: "provider.llamacpp_desc", link: "provider.install_llamacpp", url: "https://github.com/ggml-org/llama.cpp#quick-start" },
   vllm: { desc: "provider.vllm_desc", link: "provider.install_vllm", url: "https://docs.vllm.ai/en/latest/getting_started/installation/" },
   lmstudio: { desc: "provider.lmstudio_desc", link: "provider.install_lmstudio", url: "https://lmstudio.ai/download" },
+  jan: { desc: "provider.jan_desc", link: "provider.install_jan", url: "https://docs.jan.ai/desktop/api-server" },
+  docker: { desc: "provider.docker_desc", link: "provider.install_docker", url: "https://docs.docker.com/ai/model-runner/" },
+  mlx: { desc: "provider.mlx_desc", link: "provider.install_mlx", url: "https://github.com/ml-explore/mlx-lm/blob/main/mlx_lm/SERVER.md" },
 };
 
 export const KEY_HELP: Record<string, { url: string; label: string; labelKey?: string }> = {
