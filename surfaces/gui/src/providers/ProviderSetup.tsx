@@ -28,6 +28,7 @@ const LOCAL_HELP: Record<string, { desc: string; link: string; url: string }> = 
   ollama: { desc: "provider.no_key_needed_desc", link: "provider.install_ollama", url: "https://ollama.com/download" },
   llamacpp: { desc: "provider.llamacpp_desc", link: "provider.install_llamacpp", url: "https://github.com/ggml-org/llama.cpp#quick-start" },
   vllm: { desc: "provider.vllm_desc", link: "provider.install_vllm", url: "https://docs.vllm.ai/en/latest/getting_started/installation/" },
+  lmstudio: { desc: "provider.lmstudio_desc", link: "provider.install_lmstudio", url: "https://lmstudio.ai/download" },
 };
 
 export const KEY_HELP: Record<string, { url: string; label: string; labelKey?: string }> = {

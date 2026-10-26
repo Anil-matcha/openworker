@@ -1,8 +1,8 @@
-# llama.cpp and vLLM
+# llama.cpp, vLLM and LM Studio
 
-OpenWorker can use a model served by [llama.cpp](https://github.com/ggml-org/llama.cpp)
-or [vLLM](https://github.com/vllm-project/vllm), on this computer or on another machine.
-Each is its own provider in Settings ▸ Models & Keys, under "On your own hardware", next
+OpenWorker can use a model served by [llama.cpp](https://github.com/ggml-org/llama.cpp),
+[vLLM](https://github.com/vllm-project/vllm) or [LM Studio](https://lmstudio.ai), on this
+computer or on another machine. Each is its own provider in Settings ▸ Models & Keys, under "On your own hardware", next
 to Ollama. Give it the server's address and, only if the server was started with one, its
 API key. OpenWorker reads the rest from the server.
 
@@ -44,9 +44,22 @@ vllm serve nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4 \
 
 The default address is `http://localhost:8000`.
 
+## LM Studio
+
+Download a model in the LM Studio app, then start its server from the Developer tab or
+with `lms server start`. Every downloaded model is listed; LM Studio loads one when the
+first request names it.
+
+- The model's id is its LM Studio catalog name, for example `qwen/qwen3-coder-30b`.
+- The context size is the one LM Studio loaded the model with (its own listing reports
+  it); until the model is loaded, the trained window is shown instead.
+- A key is needed only if you turned one on in the app.
+
+The default address is `http://localhost:1234`.
+
 ## In the CLI
 
-The model id is `llamacpp:<id>` or `vllm:<id>`:
+The model id is `llamacpp:<id>`, `vllm:<id>` or `lmstudio:<id>`:
 
 ```bash
 openworker run --model llamacpp:my-model --prompt "..."
@@ -55,5 +68,6 @@ openworker run --model llamacpp:my-model --prompt "..."
 ## Per-model settings
 
 Longest reply, sampling, thinking and auto-compaction are set per model as for any other
-provider; see [model settings](model-settings.md). The context size of these two servers
-is set when the server starts, so OpenWorker shows it rather than setting it.
+provider; see [model settings](model-settings.md). The context size of these servers is
+set when the server starts (or, in LM Studio, when it loads the model), so OpenWorker
+shows it rather than setting it.

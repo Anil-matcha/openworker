@@ -1621,7 +1621,9 @@
     "llamacpp_desc": "No API key needed unless your llama-server was started with one.",
     "install_llamacpp": "Install llama.cpp",
     "vllm_desc": "vLLM runs on Linux with an NVIDIA GPU. A key is needed only if the server was started with one.",
-    "install_vllm": "Install vLLM"
+    "install_vllm": "Install vLLM",
+    "lmstudio_desc": "The LM Studio app serves the models you downloaded there. A key is needed only if you turned one on in the app.",
+    "install_lmstudio": "Install LM Studio"
   },
   "workspace_trust": {
     "title": "Trust this workspace’s commands?",

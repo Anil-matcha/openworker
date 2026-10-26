@@ -211,7 +211,7 @@ def _build_ollama(profile: dict[str, Any], secrets: Any) -> ProviderClient:
 
 
 def _local_server(name: str):
-    """Builder for llama.cpp and vLLM (providers/local_server.py): the user's own server,
+    """Builder for llama.cpp, vLLM and LM Studio (providers/local_server.py): the user's own server,
     reached through its `/v1`, with an optional key. Without a key the server takes any
     value, so a placeholder goes out."""
     from .local_server import PLACEHOLDER_KEY, remember_server, thinking_as_template_kwargs, v1_base
@@ -861,6 +861,34 @@ DESCRIPTORS: list[ProviderDescriptor] = [
         blurb="A vLLM server, usually on a Linux machine with an NVIDIA GPU.",
         kind="local",
     ),
+    ProviderDescriptor(
+        name="lmstudio",
+        title="LM Studio",
+        needs_key=False,
+        fields=[
+            ProviderField(
+                "base_url",
+                "Server address",
+                secret=False,
+                required=False,
+                placeholder="http://localhost:1234",
+                help="Where LM Studio's local server is listening (the Developer tab, or "
+                "`lms server start`). The /v1 path is added automatically.",
+            ),
+            ProviderField(
+                "api_key",
+                "API key (only if the server was started with one)",
+                secret=True,
+                required=False,
+            ),
+        ],
+        build=_local_server("lmstudio"),
+        # The same verified tool-calling pick as Ollama's, under LM Studio's catalog id
+        # (lmstudio.ai/models/qwen/qwen3-coder-30b, read 2026-10-25) — download it in-app.
+        recommended_model="qwen/qwen3-coder-30b",
+        blurb="The LM Studio app's local server, with whatever models you downloaded there.",
+        kind="local",
+    ),
 ]
 
 _BY_NAME = {d.name: d for d in DESCRIPTORS}
@@ -1188,7 +1216,7 @@ def verify_provider_key(
         elif name == "ollama":
             base = _normalize_ollama_url(base_url)
             resp = httpx.get(base.rstrip("/") + "/models", timeout=timeout)
-        elif name in ("llamacpp", "vllm"):
+        elif name in ("llamacpp", "vllm", "lmstudio"):
             from .local_server import v1_base
 
             headers = {"Authorization": f"Bearer {key}"} if key else {}
