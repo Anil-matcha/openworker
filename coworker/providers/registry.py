@@ -721,7 +721,7 @@ DESCRIPTORS: list[ProviderDescriptor] = [
         "upstage",
         "Upstage (Solar)",
         base_url="https://api.upstage.ai/v1",
-        recommended_model="solar-open2",
+        recommended_model="solar-pro4",
         env_key="UPSTAGE_API_KEY",
     ),
     # Resellers: many labs' models behind one key, using THEIR model namespaces (the curated

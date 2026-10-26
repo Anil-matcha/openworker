@@ -215,8 +215,12 @@ MATRIX: dict[str, ModelEntry] = {
     "mistral:mistral-large-latest": ModelEntry(
         "Mistral Large · Mistral", _AGENTIC, 128_000
     ),
-    "upstage:solar-open2": ModelEntry("Solar Open 2 · Upstage"),
-    "upstage:solar-pro3": ModelEntry("Solar Pro 3 · Upstage"),
+    # Upstage serves its Solar line under aliases that track the newest version
+    # (console.upstage.ai/docs/models/solar-pro-4 and /solar-mini-4, read 2026-10-25: "512K
+    # context length", 128K output, tool calling listed). solar-open2 stopped serving on
+    # 2026-08-12 and solar-pro3 retires 2026-10-30 (docs/models/history).
+    "upstage:solar-pro4": ModelEntry("Solar Pro 4 · Upstage", _AGENTIC, 512_000),
+    "upstage:solar-mini4": ModelEntry("Solar Mini 4 · Upstage", _AGENTIC, 512_000),
     # -- SambaNova ---------------------------------------------------------------
     # SambaCloud's OpenAI-compatible API; ids and windows are the `context_length` values
     # api.sambanova.ai/v1/models reports (keyless, read 2026-10-25). The two 128k rows are
