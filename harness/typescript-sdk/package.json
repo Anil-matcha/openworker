@@ -1,0 +1,36 @@
+{
+  "name": "@openworker/harness",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Node.js client for the OpenWorker Rust harness over managed private stdio",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "examples",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "npm run build && node --test test/config.test.mjs test/transport.test.mjs",
+    "test:integration": "npm run build && node --test --test-concurrency=1 test/integration.test.mjs",
+    "test:dynamic-agents": "npm run build && node --test --test-concurrency=1 test/dynamic-agents.test.mjs",
+    "test:openrouter-streaming": "npm run build && node --test test/openrouter-streaming.test.mjs",
+    "test:provider-auth": "npm run build && node --test test/provider-auth.test.mjs",
+    "prepack": "npm run build"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "~5.9.3"
+  }
+}

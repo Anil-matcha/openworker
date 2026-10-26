@@ -1,0 +1,35 @@
+[package]
+name = "openworker-server-reference"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[features]
+openshell-test = []
+team-test = ["openworker-store-postgres/test-support", "dep:openworker-tools"]
+
+[dependencies]
+openworker-tools = { path = "../tools-sdk", optional = true }
+openworker-artifacts = { path = "../artifacts", features = ["s3"] }
+futures-util = "0.3"
+tokio-util = { version = "0.7", features = ["io"] }
+openworker-telemetry = { path = "../telemetry", features = ["otlp"] }
+openworker-runtime = { path = "../runtime" }
+openworker-store-postgres = { path = "../store-postgres" }
+anyhow = "1"
+axum = "0.7"
+async-stream = "0.3"
+clap = { version = "4", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+zeroize = "1"
+
+[dev-dependencies]
+postgres = { version = "0.19", features = ["with-serde_json-1"] }
+reqwest = { version = "0.12", default-features = false, features = ["json","stream","rustls-tls"] }
+futures-util = "0.3"
+tempfile = "3"
+uuid = { version = "1", features = ["v4"] }

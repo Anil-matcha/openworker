@@ -1,0 +1,87 @@
+# Harness release candidate
+
+This is an additive source snapshot on public OpenWorker main. It is a branch for
+integration testing, not a release announcement or a claim of stable APIs.
+
+## Scope
+
+- Rust runtime, Rust/TypeScript SDKs, native Tools SDK, SQLite/PostgreSQL storage,
+  server reference, artifacts, telemetry and deployment references.
+- Arcade Studio and the minimal desktop starters remain available.
+- Lantern/Luma application code, custom app runtimes and obsolete app-specific
+  partner-kit packaging are omitted. Notification/device/computer tool crates,
+  core approval/MCP tests and independent stdio framing tests remain.
+- Internal partner notes, work ledgers, machine-specific qualification records
+  and account-specific AWS evidence are not published. AWS scripts require an
+  explicit target account/role and budget notification recipient.
+- Existing Python Desktop source is unchanged. Runtime fixtures now live inside
+  `harness/tests/contracts/`; the Rust workspace does not need an external fixture
+  directory just to compile.
+
+## Layout migration
+
+The Rust workspace is `harness/`; public guides are `docs/harness/`. Update local
+path dependencies, executable paths, build caches and scripts that referenced an
+older directory layout. Rust crate names and `@openworker/harness` remain the same.
+Generated partner workspaces contain path dependencies: regenerate them against
+the new workspace instead of editing installed binaries.
+
+Synthetic examples use `examples/assistant` and `example_echo`; reusable native
+tools use `notifications.*` and `device.*`. These example names are not aliases for
+private application tools. Existing installed applications remain on their pinned
+revision until their owner deliberately updates and requalifies them.
+
+## Verification for this snapshot
+
+Checks repeated during the 2026-10-26 source-layout migration:
+
+- Rust formatting and strict workspace Clippy; SDK/custom-host compilation.
+- Linux runtime unit/integration suites, including native tools, Anthropic fixtures,
+  compaction, approvals, SQLite teams, model connections, MCP and resource grants.
+- Mac SDK desktop/provider-auth tests and the retained native tool crates.
+- Deterministic server, filesystem-artifact and telemetry tests. The opt-in S3
+  integration test was not run because no object-store fixture was configured.
+- TypeScript configuration/transport tests and real-host provider-auth/OpenRouter
+  streaming fixtures. These fixtures use local HTTP servers, not live provider keys.
+- Independent MCP acceptance: qualified tool selection, SSE discovery, approvals,
+  restart, Q&A, denial, redirects, cancellation and external-server ownership.
+- Arcade: 27 tests and the production frontend build with Node.js 24. A freshly
+  generated Electron starter also installed dependencies and built its frontend.
+- Starter/custom-host generator tests, retained raw-stdio tests, deployment-script
+  tests and Task Desk/console tests. One startup-cancellation test was skipped
+  because its opt-in stack fixture was not configured.
+- Release-layout checks: workspace members, removal of legacy apps, relative
+  documentation links and source-checkout starter commands. Gitleaks found no
+  secrets in the staged snapshot. The branch starts from public main without
+  importing private commit history.
+
+- Linux SDK/PostgreSQL matrix: **123 passed**, zero failures, against an isolated
+  PostgreSQL 16.4 Docker fixture. Includes SQLite/PostgreSQL embedded/subprocess
+  team parity, dynamic agents, auth rotation, ownership fencing, durable controls,
+  queue ordering, authorization, worker death, database loss and draining. The
+  opt-in load benchmark and mixed-version upgrade drill were explicitly excluded;
+  the latter requires a separately qualified baseline worker binary.
+- The SQLite embedded/subprocess agent regression also passed in a separate,
+  serialized run with the full workspace test-feature configuration.
+
+The HTML QuickStart was checked at the source/link level. A fresh browser render
+was blocked by the local file-URL policy. No fresh GUI, signed installer, Windows
+VM, live-model, AWS or OpenShell cluster qualification is claimed by these checks.
+Generator dependency installation used npm 10 with an engine warning; use the
+documented npm 11+ for supported starter development.
+
+## Gates before announcement
+
+- Several days of Arcade/partner dogfooding, including real provider streaming,
+  auth expiry, pending approvals, cancellation and restart recovery.
+- Clean-checkout builds and packaged app acceptance on target Windows/Mac OS and
+  CPU architectures; code signing/notarization and runtime prerequisites.
+- Explicit Linux/PostgreSQL/OpenShell deployment qualification for the selected
+  versions. Local fixture tests do not certify AWS/Azure or every cluster policy.
+- Real local-model/tool compatibility, image consent and failure UX.
+- Dependency/asset license review and release version/package publication decisions.
+- Review public API/source compatibility before tagging a release. Package versions
+  remain development identifiers, not a promise of semver stability.
+
+No live provider credentials, AWS provisioning, external messages or model-controlled
+desktop actions are needed for the deterministic regression suites.

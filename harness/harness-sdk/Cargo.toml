@@ -1,0 +1,38 @@
+[package]
+name = "openworker-sdk"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[features]
+test-support = []
+
+[[bin]]
+name = "openworker-harness"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1"
+fs2 = "0.4"
+rusqlite = { version = "0.32", features = ["bundled"] }
+openworker-store-postgres = { path = "../store-postgres" }
+openworker-runtime = { path = "../runtime" }
+openworker-telemetry = { path = "../telemetry", features = ["otlp"] }
+openworker-tools = { path = "../tools-sdk" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+tokio-util = "0.7"
+zeroize = "1"
+futures-util = "0.3"
+async-stream = "0.3"
+
+[dev-dependencies]
+tempfile = "3"
+
+[[bin]]
+name = "sdk-test-host"
+path = "tests/support/host.rs"
+required-features = ["test-support"]
