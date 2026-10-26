@@ -397,30 +397,188 @@ def test_resolve_provider_from_secretstore(tmp_path):
     assert p.name == "tavily" and p.api_key == "tvly-123"
 
 
-def test_web_search_rest(tmp_path, monkeypatch):
+def _rest_client(tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
 
     from coworker.server.app import create_app
     from coworker.server.manager import SessionManager
 
     monkeypatch.setenv("COWORKER_STATE_DIR", str(tmp_path / "state"))
-    client = TestClient(create_app(SessionManager(data_dir=tmp_path / "data")))
+    for name in provider_names():
+        monkeypatch.delenv(f"{name.upper()}_API_KEY", raising=False)
+    monkeypatch.delenv("YDC_API_KEY", raising=False)
+    manager = SessionManager(data_dir=tmp_path / "data")
+    return TestClient(create_app(manager)), manager
 
-    assert client.get("/v1/web-search").json()["provider"] == "duckduckgo"
-    assert (
-        client.post(
-            "/v1/web-search", json={"provider": "tavily", "api_key": "sk-secret-xyz"}
-        ).json()["ok"]
-        is True
-    )
+
+def test_web_search_rest_lists_providers_in_registry_order(tmp_path, monkeypatch):
+    client, _ = _rest_client(tmp_path, monkeypatch)
     got = client.get("/v1/web-search").json()
-    assert got["provider"] == "tavily" and got["has_key"] is True
-    assert (
-        "sk-secret-xyz" not in client.get("/v1/web-search").text
-    )  # key never returned
-    assert (
-        client.post("/v1/web-search", json={"provider": "nope"}).json()["ok"] is False
-    )
+    assert got["provider"] == "duckduckgo" and got["fetch_via_provider"] is False
+    names = [p["name"] for p in got["providers"]]
+    assert names == provider_names() and names[0] == "duckduckgo"
+    by = {p["name"]: p for p in got["providers"]}
+    assert by["duckduckgo"] == {
+        "name": "duckduckgo", "display_name": "DuckDuckGo", "key_mode": "none", "key_url": "",
+        "has_key": False, "key_source": None, "key_env": "", "supports_fetch": False,
+    }
+    assert by["tavily"]["key_mode"] == "required" and by["tavily"]["supports_fetch"] is True
+    assert {n for n, p in by.items() if p["supports_fetch"]} == {"exa", "firecrawl", "tavily"}
+    assert by["you"]["key_mode"] == "optional" and by["you"]["key_url"]
+
+
+def test_web_search_rest_key_from_environment(tmp_path, monkeypatch):
+    client, _ = _rest_client(tmp_path, monkeypatch)
+    monkeypatch.setenv("BRAVE_API_KEY", "brv-env")
+    row = next(p for p in client.get("/v1/web-search").json()["providers"] if p["name"] == "brave")
+    assert row["has_key"] and row["key_source"] == "env" and row["key_env"] == "BRAVE_API_KEY"
+    assert "brv-env" not in client.get("/v1/web-search").text
+    # With a key in the environment the provider can be chosen.
+    assert client.post("/v1/web-search", json={"provider": "brave"}).json()["provider"] == "brave"
+
+
+def test_web_search_rest_refuses_a_keyless_required_provider(tmp_path, monkeypatch):
+    client, _ = _rest_client(tmp_path, monkeypatch)
+    resp = client.post("/v1/web-search", json={"provider": "tavily"})
+    assert resp.status_code == 400
+    assert resp.json()["ok"] is False and "Tavily needs an API key" in resp.json()["error"]
+    assert client.get("/v1/web-search").json()["provider"] == "duckduckgo"
+    assert client.post("/v1/web-search", json={"provider": "nope"}).status_code == 400
+    assert client.post("/v1/web-search", json={}).status_code == 400
+    # You.com works keyless, so it can be chosen without a key.
+    assert client.post("/v1/web-search", json={"provider": "you"}).json()["provider"] == "you"
+
+
+def test_web_search_rest_test_and_save_key(tmp_path, monkeypatch):
+    """PUT runs one search with the key before storing it; a failure returns the provider's
+    error and stores nothing. Each provider keeps its own key."""
+    from coworker.web import providers as providers_mod
+
+    searched = []
+
+    class Verify(TavilyProvider):
+        def search(self, query, max_results=5):
+            searched.append((self.name, self.api_key, query, max_results, self.timeout))
+            if self.api_key == "bad":
+                raise RuntimeError("401 Unauthorized for key bad")
+            return []
+
+    monkeypatch.setitem(providers_mod._PROVIDERS, "tavily", Verify)
+    client, manager = _rest_client(tmp_path, monkeypatch)
+
+    resp = client.put("/v1/web-search/keys/tavily", json={"api_key": "bad"})
+    assert resp.status_code == 400
+    assert resp.json()["error"] == "401 Unauthorized for key •••"  # never the key
+    assert client.get("/v1/web-search").json()["providers"][2]["has_key"] is False
+
+    resp = client.put("/v1/web-search/keys/tavily", json={"api_key": "tvly-good"})
+    assert resp.status_code == 200 and resp.json()["ok"] is True
+    assert searched[-1] == ("tavily", "tvly-good", "openworker", 1, providers_mod._VERIFY_TIMEOUT)
+    row = next(p for p in resp.json()["providers"] if p["name"] == "tavily")
+    assert row["has_key"] and row["key_source"] == "store"
+    assert "tvly-good" not in resp.text
+    # The key is stored per provider; the active provider is unchanged until chosen.
+    assert manager.secrets.get("web_search:default")["keys"] == {"tavily": "tvly-good"}
+    assert resp.json()["provider"] == "duckduckgo"
+    assert client.post("/v1/web-search", json={"provider": "tavily"}).json()["provider"] == "tavily"
+
+    # Empty, keyless and unknown providers are refused.
+    assert client.put("/v1/web-search/keys/tavily", json={"api_key": " "}).status_code == 400
+    assert client.put("/v1/web-search/keys/duckduckgo", json={"api_key": "x"}).status_code == 400
+    assert client.put("/v1/web-search/keys/nope", json={"api_key": "x"}).status_code == 400
+
+
+def test_web_search_rest_switching_keeps_other_keys(tmp_path, monkeypatch):
+    from coworker.web import providers as providers_mod
+
+    class Ok(WebSearchProvider):
+        name = "stub"
+        display_name = "Stub"
+        key_mode = "required"
+        requires_key = True
+
+        def __init__(self, api_key):
+            self.api_key = api_key
+
+        def search(self, query, max_results=5):
+            return []
+
+    monkeypatch.setitem(providers_mod._PROVIDERS, "tavily", type("T", (Ok,), {"name": "tavily"}))
+    monkeypatch.setitem(providers_mod._PROVIDERS, "exa", type("E", (Ok,), {"name": "exa"}))
+    client, manager = _rest_client(tmp_path, monkeypatch)
+    assert client.put("/v1/web-search/keys/tavily", json={"api_key": "t-1"}).json()["ok"]
+    assert client.put("/v1/web-search/keys/exa", json={"api_key": "e-1"}).json()["ok"]
+    assert client.post("/v1/web-search", json={"provider": "tavily"}).json()["ok"]
+    assert client.post("/v1/web-search", json={"provider": "exa"}).json()["ok"]
+    assert client.post("/v1/web-search", json={"provider": "tavily"}).json()["ok"]
+    assert manager.secrets.get("web_search:default")["keys"] == {"tavily": "t-1", "exa": "e-1"}
+
+    # DELETE forgets one key; the other stays. Removing the active provider's only key
+    # falls back to the keyless default instead of leaving every search failing.
+    got = client.delete("/v1/web-search/keys/exa").json()
+    assert got["ok"] and got["provider"] == "tavily"
+    assert manager.secrets.get("web_search:default")["keys"] == {"tavily": "t-1"}
+    got = client.delete("/v1/web-search/keys/tavily").json()
+    assert got["provider"] == "duckduckgo"
+    assert manager.secrets.get("web_search:default")["keys"] == {}
+    assert client.delete("/v1/web-search/keys/nope").status_code == 400
+
+
+def test_web_search_rest_fetch_via_provider(tmp_path, monkeypatch):
+    client, manager = _rest_client(tmp_path, monkeypatch)
+    got = client.post("/v1/web-search/fetch-via-provider", json={"enabled": True}).json()
+    assert got["ok"] and got["fetch_via_provider"] is True
+    assert manager.secrets.get("web_search:default")["fetch_via_provider"] is True
+    assert client.get("/v1/web-search").json()["fetch_via_provider"] is True
+    got = client.post("/v1/web-search/fetch-via-provider", json={"enabled": False}).json()
+    assert got["fetch_via_provider"] is False
+
+
+def test_legacy_profile_is_read_as_a_per_provider_key(tmp_path, monkeypatch):
+    """The pre-Customization `{provider, api_key}` profile: resolution still finds the key,
+    and the first write through the manager lands the new shape."""
+    from coworker.web import provider_host, resolve_provider
+    from coworker.web.tool import load_profile
+
+    monkeypatch.delenv("TAVILY_API_KEY", raising=False)
+    secrets = SecretStore(tmp_path / "secrets.json")
+    secrets.put("web_search:default", {"provider": "tavily", "api_key": "tvly-old"})
+    assert load_profile(secrets) == {
+        "provider": "tavily", "keys": {"tavily": "tvly-old"}, "fetch_via_provider": False,
+    }
+    assert resolve_provider(secrets).api_key == "tvly-old"
+    assert provider_host(secrets) == "api.tavily.com"
+
+    from coworker.server.manager import SessionManager
+
+    monkeypatch.setenv("COWORKER_STATE_DIR", str(tmp_path / "state"))
+    manager = SessionManager(data_dir=tmp_path / "data")
+    manager.secrets = secrets
+    got = manager.get_web_search()
+    assert got["provider"] == "tavily"
+    assert next(p for p in got["providers"] if p["name"] == "tavily")["key_source"] == "store"
+    assert secrets.get("web_search:default") == {
+        "provider": "tavily", "keys": {"tavily": "tvly-old"}, "fetch_via_provider": False,
+    }
+
+
+def test_resolve_provider_uses_the_active_providers_own_key(tmp_path, monkeypatch):
+    """Keys are per provider: the active one's stored key, then its environment variable,
+    never another provider's key."""
+    from coworker.web import resolve_provider
+
+    monkeypatch.delenv("EXA_API_KEY", raising=False)
+    monkeypatch.delenv("TAVILY_API_KEY", raising=False)
+    secrets = SecretStore(tmp_path / "secrets.json")
+    secrets.put("web_search:default", {"provider": "exa", "keys": {"tavily": "t-1", "exa": "e-1"}})
+    assert resolve_provider(secrets).api_key == "e-1"
+    secrets.put("web_search:default", {"provider": "tavily", "keys": {"tavily": "t-1", "exa": "e-1"}})
+    assert resolve_provider(secrets).api_key == "t-1"
+    secrets.put("web_search:default", {"provider": "exa", "keys": {"tavily": "t-1"}})
+    with pytest.raises(ValueError):
+        resolve_provider(secrets)  # tavily's key is not exa's
+    monkeypatch.setenv("EXA_API_KEY", "e-env")
+    assert resolve_provider(secrets).api_key == "e-env"
 
 
 def test_engine_registers_web_search(tmp_path):

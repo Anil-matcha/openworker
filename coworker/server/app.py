@@ -2349,12 +2349,34 @@ def create_app(manager: SessionManager) -> FastAPI:
     def web_search_get() -> dict[str, Any]:
         return manager.get_web_search()
 
+    def _web_search_reply(result: dict[str, Any]) -> Any:
+        # Settings routes: a refusal is a 400 with a plain message, never a key.
+        if result.get("ok"):
+            return result
+        return JSONResponse({"ok": False, "error": result.get("error", "")}, status_code=400)
+
     @app.post("/v1/web-search")
-    def web_search_set(body: dict) -> dict[str, Any]:
+    def web_search_set(body: dict) -> Any:
         provider = (body or {}).get("provider", "")
         if not provider:
-            return {"ok": False, "error": "provider required"}
-        return manager.set_web_search(provider, (body or {}).get("api_key"))
+            return _web_search_reply({"ok": False, "error": "provider required"})
+        return _web_search_reply(manager.set_web_search(provider))
+
+    @app.put("/v1/web-search/keys/{name}")
+    def web_search_key_put(name: str, body: dict) -> Any:
+        return _web_search_reply(
+            manager.set_web_search_key(name, str((body or {}).get("api_key", "")))
+        )
+
+    @app.delete("/v1/web-search/keys/{name}")
+    def web_search_key_delete(name: str) -> Any:
+        return _web_search_reply(manager.clear_web_search_key(name))
+
+    @app.post("/v1/web-search/fetch-via-provider")
+    def web_search_fetch_via_provider(body: dict) -> Any:
+        return _web_search_reply(
+            manager.set_fetch_via_provider(bool((body or {}).get("enabled", False)))
+        )
 
     # -- model providers (OpenAI, Ollama, …) ------------------------------------
     @app.get("/v1/providers")

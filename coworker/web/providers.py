@@ -40,9 +40,19 @@ class WebSearchProvider(ABC):
     # Keyless provider that still uses a key when one is configured (better quota/features).
     # `build_provider` passes the key through instead of dropping it.
     accepts_key: bool = False
+    # Whether the provider can also return a page's text (`fetch_page`), so `web_fetch` can
+    # go through it instead of fetching from this machine (Settings ▸ Customization).
+    supports_fetch: bool = False
+    # Per-call HTTP timeout. Settings' "Test and save" shortens it for its one check.
+    timeout: float = _TIMEOUT
 
     @abstractmethod
     def search(self, query: str, max_results: int = 5) -> list[SearchResult]: ...
+
+    def fetch_page(self, url: str) -> str:
+        """The readable text of `url`, fetched by the provider. Only for providers with
+        `supports_fetch`; the rest raise."""
+        raise NotImplementedError(f"{self.name} does not fetch pages")
 
 
 class DuckDuckGoProvider(WebSearchProvider):
@@ -104,7 +114,7 @@ class YouProvider(WebSearchProvider):
             self._KEYED_URL if self.api_key else self._KEYLESS_URL,
             headers=headers,
             params={"query": query, "count": max_results},
-            timeout=_TIMEOUT,
+            timeout=self.timeout,
         )
         resp.raise_for_status()
         data = resp.json()
@@ -127,6 +137,7 @@ class TavilyProvider(WebSearchProvider):
     key_url = "https://tavily.com"
     key_mode = "required"
     requires_key = True
+    supports_fetch = True
 
     def __init__(self, api_key: str) -> None:
         self.api_key = api_key
@@ -137,7 +148,7 @@ class TavilyProvider(WebSearchProvider):
         resp = httpx.post(
             "https://api.tavily.com/search",
             json={"api_key": self.api_key, "query": query, "max_results": max_results},
-            timeout=_TIMEOUT,
+            timeout=self.timeout,
         )
         resp.raise_for_status()
         data = resp.json()
@@ -149,6 +160,27 @@ class TavilyProvider(WebSearchProvider):
             )
             for r in data.get("results", [])
         ]
+
+    def fetch_page(self, url: str) -> str:
+        # https://docs.tavily.com/documentation/api-reference/endpoint/extract — POST
+        # {urls}, bearer auth; the text is results[].raw_content, failures land in
+        # failed_results[] even on a 200.
+        import httpx
+
+        resp = httpx.post(
+            "https://api.tavily.com/extract",
+            headers={"Authorization": f"Bearer {self.api_key}"},
+            json={"urls": [url]},
+            timeout=self.timeout,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        for r in data.get("results") or []:
+            if r.get("raw_content"):
+                return str(r["raw_content"])
+        failed = data.get("failed_results") or []
+        detail = failed[0].get("error", "") if failed else "no content returned"
+        raise RuntimeError(f"Tavily could not extract the page: {detail}")
 
 
 class BraveProvider(WebSearchProvider):
@@ -171,7 +203,7 @@ class BraveProvider(WebSearchProvider):
                 "Accept": "application/json",
             },
             params={"q": query, "count": max_results},
-            timeout=_TIMEOUT,
+            timeout=self.timeout,
         )
         resp.raise_for_status()
         data = resp.json()
@@ -209,7 +241,7 @@ class SerperProvider(WebSearchProvider):
             "https://google.serper.dev/search",
             headers={"X-API-KEY": self.api_key},
             json={"q": query, "num": max_results},
-            timeout=_TIMEOUT,
+            timeout=self.timeout,
         )
         resp.raise_for_status()
         data = resp.json()
@@ -229,6 +261,7 @@ class ExaProvider(WebSearchProvider):
     key_url = "https://exa.ai"
     key_mode = "required"
     requires_key = True
+    supports_fetch = True
 
     def __init__(self, api_key: str) -> None:
         self.api_key = api_key
@@ -249,7 +282,7 @@ class ExaProvider(WebSearchProvider):
                 "numResults": max_results,
                 "contents": {"highlights": True},
             },
-            timeout=_TIMEOUT,
+            timeout=self.timeout,
         )
         resp.raise_for_status()
         data = resp.json()
@@ -262,6 +295,34 @@ class ExaProvider(WebSearchProvider):
             for r in data.get("results", [])
         ]
 
+    def fetch_page(self, url: str) -> str:
+        # https://exa.ai/docs/reference/get-contents — POST {urls, text: true}; the text is
+        # results[].text, and statuses[] says per URL whether the crawl succeeded.
+        import httpx
+
+        resp = httpx.post(
+            "https://api.exa.ai/contents",
+            headers={
+                "x-api-key": self.api_key,
+                "Content-Type": "application/json",
+                "x-exa-integration": "andrewyng/openworker-integration",
+            },
+            json={"urls": [url], "text": True},
+            timeout=self.timeout,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        for r in data.get("results") or []:
+            if r.get("text"):
+                return str(r["text"])
+        detail = "no content returned"
+        for st in data.get("statuses") or []:
+            if st.get("status") == "error":
+                err = st.get("error") or {}
+                detail = f"{err.get('tag', 'error')} (HTTP {err.get('httpStatusCode', '?')})"
+                break
+        raise RuntimeError(f"Exa could not fetch the page: {detail}")
+
 
 class FirecrawlProvider(WebSearchProvider):
     """Firecrawl web search (https://docs.firecrawl.dev) via the v2 REST API."""
@@ -271,6 +332,7 @@ class FirecrawlProvider(WebSearchProvider):
     key_url = "https://firecrawl.dev"
     key_mode = "required"
     requires_key = True
+    supports_fetch = True
 
     def __init__(self, api_key: str) -> None:
         self.api_key = api_key
@@ -282,7 +344,7 @@ class FirecrawlProvider(WebSearchProvider):
             "https://api.firecrawl.dev/v2/search",
             headers={"Authorization": f"Bearer {self.api_key}"},
             json={"query": query, "limit": max_results},
-            timeout=_TIMEOUT,
+            timeout=self.timeout,
         )
         resp.raise_for_status()
         data = resp.json()
@@ -294,6 +356,27 @@ class FirecrawlProvider(WebSearchProvider):
             )
             for r in (data.get("data", {}) or {}).get("web", [])
         ]
+
+    def fetch_page(self, url: str) -> str:
+        # https://docs.firecrawl.dev/api-reference/endpoint/scrape — POST /v2/scrape
+        # {url, formats: ["markdown"]}, bearer auth; the text is data.markdown.
+        import httpx
+
+        resp = httpx.post(
+            "https://api.firecrawl.dev/v2/scrape",
+            headers={"Authorization": f"Bearer {self.api_key}"},
+            json={"url": url, "formats": ["markdown"]},
+            timeout=self.timeout,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        text = (data.get("data") or {}).get("markdown") if isinstance(data, dict) else None
+        if not text:
+            detail = data.get("error") if isinstance(data, dict) else None
+            raise RuntimeError(
+                f"Firecrawl could not scrape the page: {detail or 'no content returned'}"
+            )
+        return str(text)
 
 
 _PROVIDERS = {
@@ -320,3 +403,23 @@ def build_provider(name: str, api_key: Optional[str] = None) -> WebSearchProvide
 
 def provider_names() -> list[str]:
     return list(_PROVIDERS)
+
+
+def provider_class(name: str) -> Optional[type[WebSearchProvider]]:
+    return _PROVIDERS.get(name)
+
+
+_VERIFY_TIMEOUT = 10.0
+
+
+def verify_key(name: str, api_key: str) -> Optional[str]:
+    """Run one search with `api_key` ("Test and save"). None when it worked, else the
+    provider's error text — with the key scrubbed, should a library echo it."""
+    try:
+        provider = build_provider(name, api_key)
+        provider.timeout = _VERIFY_TIMEOUT
+        provider.search("openworker", max_results=1)
+    except Exception as exc:  # noqa: BLE001 - the text goes to the person as-is
+        text = str(exc) or exc.__class__.__name__
+        return text.replace(api_key, "•••") if api_key else text
+    return None
