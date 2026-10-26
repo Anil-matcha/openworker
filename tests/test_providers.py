@@ -471,7 +471,7 @@ def test_compat_models_route_and_get_tool_capabilities():
         "xai:grok-4.3",
         "mistral:mistral-large-latest",
         "orcarouter:anthropic/claude-sonnet-5",
-        "atlascloud:openai/gpt-4.1-mini",
+        "atlascloud:zai-org/glm-5.2",
     ):
         prefix = model.split(":", 1)[0]
         assert router._provider_name(model) == prefix

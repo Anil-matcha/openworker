@@ -704,7 +704,7 @@ DESCRIPTORS: list[ProviderDescriptor] = [
         "atlascloud",
         "Atlas Cloud",
         base_url="https://api.atlascloud.ai/v1",
-        recommended_model="openai/gpt-4.1-mini",
+        recommended_model="zai-org/glm-5.2",
         env_key="ATLASCLOUD_API_KEY",
     ),
     # Resellers: many labs' models behind one key, using THEIR model namespaces (the curated

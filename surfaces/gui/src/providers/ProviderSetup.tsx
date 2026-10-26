@@ -52,7 +52,7 @@ export const KEY_HELP: Record<string, { url: string; label: string; labelKey?: s
   minimax: { url: "https://platform.minimax.io", label: "platform.minimax.io" },
   xai: { url: "https://console.x.ai", label: "console.x.ai" },
   sambanova: { url: "https://cloud.sambanova.ai/apis", label: "cloud.sambanova.ai" },
-  atlascloud: { url: "https://www.atlascloud.ai/user/api-keys", label: "atlascloud.ai" },
+  atlascloud: { url: "https://www.atlascloud.ai/console/api-keys", label: "atlascloud.ai" },
 };
 
 export type Verify = { state: "idle" | "testing" | "ok" | "error"; msg?: string };

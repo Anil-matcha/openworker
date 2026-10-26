@@ -230,8 +230,12 @@ MATRIX: dict[str, ModelEntry] = {
     "sambanova:MiniMax-M3.1-Flash": ModelEntry(
         "MiniMax M3.1 Flash · SambaNova", _AGENTIC, 1_048_576
     ),
-    "atlascloud:openai/gpt-4.1-mini": ModelEntry(
-        "GPT-4.1 mini · via Atlas Cloud", _AGENTIC, 1_047_576
+    # Atlas Cloud fronts open-weight models under each lab's namespace. Id and window
+    # from api.atlascloud.ai/v1/models (keyless, read 2026-10-25: `context_length`
+    # 1,048,576, `supported_features` lists tools); the earlier openai/gpt-4.1-mini row is
+    # not in its catalogue any more.
+    "atlascloud:zai-org/glm-5.2": ModelEntry(
+        "GLM-5.2 · via Atlas Cloud", _AGENTIC, 1_048_576
     ),
     # -- resellers (their model namespaces, verbatim) -----------------------------
     "together:thinkingmachines/Inkling": ModelEntry("Inkling · via Together"),
