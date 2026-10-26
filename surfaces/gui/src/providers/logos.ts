@@ -75,7 +75,6 @@ export const PROVIDER_ORDER = [
   "vertex",
   "openrouter",
   "openrouter-account",
-  "orcarouter",
   "fireworks",
   "together",
   "zai",
@@ -87,6 +86,7 @@ export const PROVIDER_ORDER = [
   "xai",
   "nebius",
   "requesty",
+  "orcarouter",
 ];
 
 export function providerRank(name: string): number {

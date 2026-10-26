@@ -288,7 +288,6 @@ COMPAT_VENDORS = {
     "qwen": "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
     "xai": "https://api.x.ai/v1",
     "mistral": "https://api.mistral.ai/v1",
-    "orcarouter": "https://api.orcarouter.ai/v1",
 }
 
 
