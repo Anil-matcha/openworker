@@ -247,6 +247,12 @@ export function ModelsTab() {
           <p className="text-meta text-muted mb-2.5 leading-relaxed">
             {t(info?.is_custom ? "manage.custom_models_help" : "manage.models_help")}
           </p>
+          {ps.sel === "azure" && (
+            // No catalogue on Azure: the id to add is the deployment's name.
+            <p className="text-meta text-muted mb-2.5 leading-relaxed" data-testid="set-azure-deployment-note">
+              {t("manage.azure_deployment_help")}
+            </p>
+          )}
           {info?.is_custom && (
             <div className="flex items-center gap-3 mb-2.5" data-testid="custom-fetch-row">
               <button className={BTN_BORDERED} data-testid="custom-fetch-models" disabled={fetching} onClick={() => void fetchModels()}>

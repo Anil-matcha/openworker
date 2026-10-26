@@ -37,6 +37,9 @@ const LOCAL_HELP: Record<string, { desc: string; link: string; url: string }> = 
 export const KEY_HELP: Record<string, { url: string; label: string; labelKey?: string }> = {
   anthropic: { url: "https://console.anthropic.com/settings/keys", label: "console.anthropic.com" },
   openai: { url: "https://platform.openai.com/api-keys", label: "platform.openai.com" },
+  // The Azure portal's Azure OpenAI hub: pick the resource, then Keys and Endpoint.
+  azure: { url: "https://portal.azure.com/#view/Microsoft_Azure_ProjectOxford/CognitiveServicesHub/~/OpenAI", label: "portal.azure.com" },
+
   gemini: { url: "https://aistudio.google.com/apikey", label: "aistudio.google.com" },
   ark: { url: "https://console.byteplus.com/ark/region:ark+ap-southeast-1/apiKey", label: "console.byteplus.com" },
   "ark-agent-plan-cn": { url: "https://console.volcengine.com/ark/region:cn-beijing/openManagement?LLM=%7B%7D&advancedActiveKey=agentPlan", label: "console.volcengine.com" },

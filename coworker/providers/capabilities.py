@@ -88,6 +88,15 @@ def capabilities_for(model: str) -> ModelCapabilities:
             tools=True, vision=False, parallel_tool_calls=True, streaming=True
         )
 
+    # Azure OpenAI: the id is the user's deployment name, which may say nothing about
+    # the model behind it (the GPT / o-series name checks above still apply when it
+    # does). Every current OpenAI model there calls tools in parallel; vision stays
+    # off until the name says otherwise, so images degrade to text instead of a 400.
+    if provider == "azure":
+        return ModelCapabilities(
+            tools=True, vision=False, parallel_tool_calls=True, streaming=True
+        )
+
     # Conservative default for unknown models.
     return ModelCapabilities(
         tools=True, vision=False, parallel_tool_calls=False, streaming=True

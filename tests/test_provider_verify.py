@@ -314,3 +314,46 @@ def test_verify_silent_exception_falls_back_to_class_name_only(monkeypatch):
 
     _patch_get(monkeypatch, raise_exc=Weird())
     assert verify_provider_key("openai", api_key="sk-x") == {"ok": False, "error": "Couldn't reach OpenAI (Weird)."}
+
+
+# -- verify_provider_key: Azure OpenAI probes the user's resource, never api.openai.com ----
+def test_verify_azure_lists_models_at_the_resource_v1_api(monkeypatch):
+    cap: dict = {}
+    _patch_get(monkeypatch, status=200, capture=cap)
+    assert verify_provider_key(
+        "azure", api_key="az-key", fields={"endpoint": "https://contoso.openai.azure.com"}
+    ) == {"ok": True}
+    assert cap["url"] == "https://contoso.openai.azure.com/openai/v1/models"
+    assert cap["headers"]["Authorization"] == "Bearer az-key"
+    # One probe: /openai/v1 is always normalised in, so no completions-route check follows.
+    assert [c["url"] for c in cap["calls"]] == ["https://contoso.openai.azure.com/openai/v1/models"]
+    assert not any("api.openai.com" in c["url"] for c in cap["calls"])
+
+
+def test_verify_azure_accepts_an_endpoint_already_on_v1(monkeypatch):
+    cap: dict = {}
+    _patch_get(monkeypatch, status=200, capture=cap)
+    verify_provider_key(
+        "azure", api_key="az-key", fields={"endpoint": "https://contoso.openai.azure.com/openai/v1/"}
+    )
+    assert cap["url"] == "https://contoso.openai.azure.com/openai/v1/models"
+
+
+def test_verify_azure_without_an_endpoint_asks_for_one_without_a_request(monkeypatch):
+    cap: dict = {}
+    _patch_get(monkeypatch, status=200, capture=cap)
+    res = verify_provider_key("azure", api_key="az-key", fields={})
+    assert res["ok"] is False and "endpoint" in res["error"].lower()
+    assert "calls" not in cap
+
+
+def test_verify_azure_bad_key_and_wrong_host_read_differently(monkeypatch):
+    _patch_get(monkeypatch, status=401)
+    assert verify_provider_key(
+        "azure", api_key="az-bad", fields={"endpoint": "https://contoso.openai.azure.com"}
+    ) == {"ok": False, "error": "Invalid API key."}
+    _patch_get(monkeypatch, status=404)
+    res = verify_provider_key(
+        "azure", api_key="az-key", fields={"endpoint": "https://example.com"}
+    )
+    assert res["ok"] is False and "no Azure OpenAI v1 API" in res["error"]
