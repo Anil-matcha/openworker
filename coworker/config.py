@@ -91,6 +91,8 @@ class Config:
     port: int = 8765
     # Web search provider: "duckduckgo" (keyless default) | "you" (keyless, optional key)
     # | "tavily" | "brave" | "serper" | "exa" | "firecrawl" (the keyed ones need a key).
+    # Settings ▸ Customization writes the choice (and the keys) to the secret store's
+    # `web_search:default` profile, which wins over this value.
     web_search_provider: str = "duckduckgo"
     # OpenWorker Cloud (sign-in + managed connectors). Config, never constants:
     # dev/staging/BYO-VPC deployments point these at their own instances.
