@@ -1102,6 +1102,21 @@ export async function mockApi(page: import("@playwright/test").Page) {
     });
   });
 
+  // UX-058: the Web search section's per-test state (mirrors GET /v1/web-search).
+  const webSearch = {
+    provider: "duckduckgo",
+    fetch_via_provider: false,
+    providers: [
+      { name: "duckduckgo", display_name: "DuckDuckGo", key_mode: "none", key_url: "", key_source: null as "store" | "env" | null, key_env: "", supports_fetch: false },
+      { name: "you", display_name: "You.com", key_mode: "optional", key_url: "https://you.com/platform", key_source: null as "store" | "env" | null, key_env: "", supports_fetch: false },
+      { name: "tavily", display_name: "Tavily", key_mode: "required", key_url: "https://tavily.com", key_source: "store" as "store" | "env" | null, key_env: "", supports_fetch: true },
+      { name: "brave", display_name: "Brave Search", key_mode: "required", key_url: "https://brave.com/search/api", key_source: "env" as "store" | "env" | null, key_env: "BRAVE_API_KEY", supports_fetch: false },
+      { name: "serper", display_name: "Serper", key_mode: "required", key_url: "https://serper.dev", key_source: null as "store" | "env" | null, key_env: "", supports_fetch: false },
+      { name: "exa", display_name: "Exa", key_mode: "required", key_url: "https://exa.ai", key_source: null as "store" | "env" | null, key_env: "", supports_fetch: true },
+      { name: "firecrawl", display_name: "Firecrawl", key_mode: "required", key_url: "https://firecrawl.dev", key_source: null as "store" | "env" | null, key_env: "", supports_fetch: true },
+    ],
+  };
+
   await page.route("**/v1/capabilities", (route) =>
     route.fulfill({
       status: 200,
@@ -1462,6 +1477,47 @@ export async function mockApi(page: import("@playwright/test").Page) {
 
     if (p.endsWith("/v1/health")) return json(HEALTH);
     if (p.endsWith("/v1/settings")) return json(SETTINGS);
+
+    // Settings ▸ Customization ▸ Web search (UX-058). Keys live per provider; "Test and
+    // save" fails for a key spelled "bad-*", the way the real server relays a 401.
+    const webSearchSnapshot = () => ({
+      provider: webSearch.provider,
+      fetch_via_provider: webSearch.fetch_via_provider,
+      providers: webSearch.providers.map((row) => ({ ...row, has_key: row.key_source !== null })),
+    });
+    const webSearchReply = (ok: boolean, error = "") =>
+      ok ? json({ ok: true, ...webSearchSnapshot() }) : json({ ok: false, error }, 400);
+    if (p.endsWith("/v1/web-search") && m === "GET") return json(webSearchSnapshot());
+    if (p.endsWith("/v1/web-search") && m === "POST") {
+      const name = String(req.postDataJSON()?.provider || "");
+      const row = webSearch.providers.find((r) => r.name === name);
+      if (!row) return webSearchReply(false, `unknown provider: ${name}`);
+      if (row.key_mode === "required" && row.key_source === null)
+        return webSearchReply(false, `${row.display_name} needs an API key before it can be chosen. Add one first.`);
+      webSearch.provider = name;
+      return webSearchReply(true);
+    }
+    const keyMatch = p.match(/\/v1\/web-search\/keys\/([\w-]+)$/);
+    if (keyMatch && (m === "PUT" || m === "DELETE")) {
+      const row = webSearch.providers.find((r) => r.name === keyMatch[1]);
+      if (!row) return webSearchReply(false, `unknown provider: ${keyMatch[1]}`);
+      if (m === "DELETE") {
+        row.key_source = null;
+        row.key_env = "";
+        if (webSearch.provider === row.name && row.key_mode === "required") webSearch.provider = "duckduckgo";
+        return webSearchReply(true);
+      }
+      const key = String(req.postDataJSON()?.api_key || "").trim();
+      if (!key) return webSearchReply(false, "api_key required");
+      if (key.startsWith("bad-")) return webSearchReply(false, "Client error '401 Unauthorized' for url 'https://api.example/search'");
+      row.key_source = "store";
+      row.key_env = "";
+      return webSearchReply(true);
+    }
+    if (p.endsWith("/v1/web-search/fetch-via-provider") && m === "POST") {
+      webSearch.fetch_via_provider = !!req.postDataJSON()?.enabled;
+      return webSearchReply(true);
+    }
     if (p.endsWith("/v1/settings/context-bar") && m === "POST") {
       Object.assign(SETTINGS, req.postDataJSON());
       return json({ ok: true, context_bar: SETTINGS.context_bar });

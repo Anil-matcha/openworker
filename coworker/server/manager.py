@@ -4014,40 +4014,147 @@ class SessionManager:
         return {"ok": True}
 
     # -- web search -------------------------------------------------------------
-    def get_web_search(self) -> dict[str, Any]:
+    # Settings ▸ Customization ▸ Web search. The profile `web_search:default` holds the
+    # active provider, one key per provider (`keys`) and the fetch-through-provider switch;
+    # `coworker.web.tool.load_profile` reads the pre-Customization `{provider, api_key}`
+    # shape too, and the first write here lands the new one.
+    def _web_profile(self) -> dict[str, Any]:
+        from ..web.tool import PROFILE, load_profile
+
+        raw = self.secrets.get(PROFILE) or {}
+        profile = load_profile(self.secrets)
+        if raw and ("api_key" in raw or "keys" not in raw):
+            self.secrets.put(PROFILE, profile)  # one-time migration of the legacy shape
+        return profile
+
+    def _save_web_profile(self, profile: dict[str, Any]) -> None:
+        from ..web.tool import PROFILE
+
+        self.secrets.put(PROFILE, profile)
+
+    def _active_web_provider(self, profile: dict[str, Any]) -> str:
         from ..config import load_config
-        from ..web import provider_names
 
-        profile = self.secrets.get("web_search:default") or {}
-        provider = (
-            profile.get("provider") or load_config().web_search_provider or "duckduckgo"
-        )
-        return {
-            "provider": provider,
-            "has_key": bool(profile.get("api_key")),
-            "providers": provider_names(),
-        }
+        return profile.get("provider") or load_config().web_search_provider or "duckduckgo"
 
-    def set_web_search(
-        self, provider: str, api_key: Optional[str] = None
-    ) -> dict[str, Any]:
-        from ..web import provider_names
-
-        if provider not in provider_names():
-            return {"ok": False, "error": f"unknown provider: {provider}"}
-        before = self.get_web_search()["provider"]
-        profile: dict[str, Any] = {"provider": provider}
-        if api_key:
-            profile["api_key"] = api_key
-        self.secrets.put("web_search:default", profile)
+    def _forget_search_grants(self) -> None:
         # §1.9: "Always allow searches this session" is consent to a NAMED destination —
         # the card says which provider the queries go to. A new provider is a new
         # destination, so every live session's grant dies with the old one. (Scheduled
         # tasks that name-allow web_search are unaffected: their approver re-allows.)
+        for engine in self._engines.values():
+            engine.permissions.session_allow_tools.discard("web_search")
+
+    def get_web_search(self) -> dict[str, Any]:
+        """The Web search section: the active provider, the fetch switch, and every provider
+        with its key state. Never the keys themselves."""
+        from ..web import provider_names
+        from ..web.providers import provider_class
+        from ..web.tool import env_key_var, stored_key
+
+        profile = self._web_profile()
+        rows: list[dict[str, Any]] = []
+        for name in provider_names():  # registry order; duckduckgo first
+            cls = provider_class(name)
+            assert cls is not None
+            stored = bool(stored_key(profile, name))
+            var = None if stored else env_key_var(name)
+            rows.append(
+                {
+                    "name": name,
+                    "display_name": cls.display_name,
+                    "key_mode": cls.key_mode,
+                    "key_url": cls.key_url,
+                    "has_key": stored or bool(var),
+                    "key_source": "store" if stored else ("env" if var else None),
+                    "key_env": var or "",
+                    "supports_fetch": cls.supports_fetch,
+                }
+            )
+        return {
+            "provider": self._active_web_provider(profile),
+            "fetch_via_provider": bool(profile.get("fetch_via_provider")),
+            "providers": rows,
+        }
+
+    def _web_key_at_hand(self, profile: dict[str, Any], name: str) -> bool:
+        from ..web.tool import env_key_var, stored_key
+
+        return bool(stored_key(profile, name) or env_key_var(name))
+
+    def set_web_search(self, provider: str) -> dict[str, Any]:
+        """Make `provider` the active search service. A service that needs a key cannot be
+        chosen until one is stored or in the environment."""
+        from ..web import provider_names
+        from ..web.providers import provider_class
+
+        cls = provider_class(provider)
+        if provider not in provider_names() or cls is None:
+            return {"ok": False, "error": f"unknown provider: {provider}"}
+        profile = self._web_profile()
+        if cls.key_mode == "required" and not self._web_key_at_hand(profile, provider):
+            return {
+                "ok": False,
+                "error": f"{cls.display_name} needs an API key before it can be chosen. Add one first.",
+            }
+        before = self._active_web_provider(profile)
+        profile["provider"] = provider
+        self._save_web_profile(profile)
         if provider != before:
-            for engine in self._engines.values():
-                engine.permissions.session_allow_tools.discard("web_search")
-        return {"ok": True, "provider": provider}
+            self._forget_search_grants()
+        return {"ok": True, **self.get_web_search()}
+
+    def set_web_search_key(self, name: str, api_key: str) -> dict[str, Any]:
+        """"Test and save": one search with the key, then store it under that provider.
+        Other providers' keys are untouched."""
+        from ..web.providers import provider_class, verify_key
+
+        cls = provider_class(name)
+        if cls is None:
+            return {"ok": False, "error": f"unknown provider: {name}"}
+        if cls.key_mode == "none":
+            return {"ok": False, "error": f"{cls.display_name} does not take a key."}
+        api_key = (api_key or "").strip()
+        if not api_key:
+            return {"ok": False, "error": "api_key required"}
+        error = verify_key(name, api_key)
+        if error:
+            return {"ok": False, "error": error}
+        profile = self._web_profile()
+        profile.setdefault("keys", {})[name] = api_key
+        self._save_web_profile(profile)
+        return {"ok": True, **self.get_web_search()}
+
+    def clear_web_search_key(self, name: str) -> dict[str, Any]:
+        """Forget a stored key. If that leaves the active provider with no key at all, the
+        keyless default takes over rather than every search failing."""
+        from ..web.providers import provider_class
+
+        cls = provider_class(name)
+        if cls is None:
+            return {"ok": False, "error": f"unknown provider: {name}"}
+        profile = self._web_profile()
+        profile.get("keys", {}).pop(name, None)
+        active = self._active_web_provider(profile)
+        if (
+            active == name
+            and cls.key_mode == "required"
+            and not self._web_key_at_hand(profile, name)
+        ):
+            profile["provider"] = "duckduckgo"
+            self._save_web_profile(profile)
+            self._forget_search_grants()
+        else:
+            self._save_web_profile(profile)
+        return {"ok": True, **self.get_web_search()}
+
+    def set_fetch_via_provider(self, enabled: bool) -> dict[str, Any]:
+        """"Fetch pages through the search service" — honoured only while the active
+        provider offers it (`coworker.web.tool.fetch_provider`)."""
+        profile = self._web_profile()
+        profile["fetch_via_provider"] = bool(enabled)
+        self._save_web_profile(profile)
+        return {"ok": True, **self.get_web_search()}
 
     # -- model providers (OpenAI, Ollama, …) ------------------------------------
     def get_providers(self) -> list[dict[str, Any]]:
