@@ -444,12 +444,25 @@ MATRIX: dict[str, ModelEntry] = {
     # -- Groq (LPU inference) ---------------------------------------------------
     # Groq keeps its own short ids. Rows and windows from console.groq.com/docs/models
     # (production table, read 2026-10-25: 131,072 context each; the earlier Maverick,
-    # R1-distill and QwQ ids are no longer listed). Tool use per console.groq.com/docs/tool-use.
+    # R1-distill and QwQ ids are no longer listed). console.groq.com/docs/tool-use (same
+    # day): all three take tools; only Llama 3.3 does parallel tool use.
     "groq:llama-3.3-70b-versatile": ModelEntry(
         "Llama 3.3 70B Versatile · via Groq", _AGENTIC, 131_072
     ),
-    "groq:openai/gpt-oss-120b": ModelEntry("GPT-OSS 120B · via Groq", _AGENTIC, 131_072),
-    "groq:openai/gpt-oss-20b": ModelEntry("GPT-OSS 20B · via Groq", _AGENTIC, 131_072),
+    "groq:openai/gpt-oss-120b": ModelEntry(
+        "GPT-OSS 120B · via Groq",
+        ModelCapabilities(
+            tools=True, vision=False, parallel_tool_calls=False, streaming=True
+        ),
+        131_072,
+    ),
+    "groq:openai/gpt-oss-20b": ModelEntry(
+        "GPT-OSS 20B · via Groq",
+        ModelCapabilities(
+            tools=True, vision=False, parallel_tool_calls=False, streaming=True
+        ),
+        131_072,
+    ),
 }
 
 
