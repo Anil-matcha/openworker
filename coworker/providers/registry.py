@@ -26,11 +26,15 @@ from .anthropic_provider import AnthropicProvider
 from .base import ProviderClient
 from .bedrock_provider import BedrockProvider
 from .gemini_provider import GeminiProvider
+from .local_server import LOCAL_SERVERS
 from .openai_provider import OpenAIProvider
 from .openai_responses import OpenAIResponsesProvider
 from .vertex_provider import VertexProvider
 
 DEFAULT_OLLAMA_URL = "http://localhost:11434"
+# The index deliberately lives in the SecretStore too: it names profiles which contain
+# credentials, and keeping the two together makes a future secure-store backend a drop-in.
+CUSTOM_PROVIDERS_PROFILE = "providers:custom"
 
 
 @dataclass(frozen=True)
@@ -211,7 +215,8 @@ def _build_ollama(profile: dict[str, Any], secrets: Any) -> ProviderClient:
 
 
 def _local_server(name: str):
-    """Builder for llama.cpp, vLLM and LM Studio (providers/local_server.py): the user's own server,
+    """Builder for the OpenAI-compatible local servers (providers/local_server.py: llama.cpp,
+    vLLM, LM Studio, Jan, Docker Model Runner, mlx-lm): the user's own server,
     reached through its `/v1`, with an optional key. Without a key the server takes any
     value, so a placeholder goes out."""
     from .local_server import PLACEHOLDER_KEY, remember_server, thinking_as_template_kwargs, v1_base
@@ -377,6 +382,50 @@ def _responses_compat(
         recommended_model=recommended_model,
         env_key=env_key,
         blurb=f"Uses {title}'s OpenAI-compatible Responses API — the endpoint is prefilled, just add your key.",
+    )
+
+
+def _custom_provider_descriptor(name: str, title: str) -> ProviderDescriptor:
+    """Descriptor synthesized for a user-defined OpenAI-compatible endpoint.
+
+    Unlike the built-ins there is no catalog or capability claim here. The endpoint and
+    bearer key are required; model ids are supplied separately by the user.
+    """
+    return ProviderDescriptor(
+        name=name,
+        title=title,
+        needs_key=True,
+        fields=[
+            ProviderField("api_key", f"{title} API key", secret=True),
+            ProviderField(
+                "base_url",
+                "Endpoint",
+                required=True,
+                placeholder="https://…/v1",
+                help="An HTTPS OpenAI-compatible API base URL ending in /v1. HTTP is allowed only for local gateways.",
+            ),
+        ],
+        build=_openai_compat(title, ""),
+        blurb="Uses the standard OpenAI Chat Completions API. Add model IDs manually below.",
+    )
+
+
+def _disabled_custom_provider_descriptor(name: str, title: str) -> ProviderDescriptor:
+    """Keep a removed route recognizable so old sessions fail closed, never reroute."""
+
+    def build(profile: dict[str, Any], secrets: Any) -> ProviderClient:
+        raise RuntimeError(
+            f"{title} was removed from Settings ▸ Models. Configure that provider again "
+            "before continuing this session."
+        )
+
+    return ProviderDescriptor(
+        name=name,
+        title=title,
+        needs_key=True,
+        fields=[],
+        build=build,
+        blurb="Removed custom provider.",
     )
 
 
@@ -793,6 +842,41 @@ DESCRIPTORS: list[ProviderDescriptor] = [
         recommended_model="llama-3.3-70b-versatile",
         env_key="GROQ_API_KEY",
     ),
+    # Four more OpenAI-compatible vendors (2026-10-26); endpoints, key pages and the
+    # recommended ids read from each vendor's docs that day (sources in matrix.py).
+    _compat(
+        "cerebras",
+        "Cerebras",
+        base_url="https://api.cerebras.ai/v1",
+        recommended_model="gpt-oss-120b",
+        env_key="CEREBRAS_API_KEY",
+    ),
+    # Hugging Face routes each repo id to one of its partner providers; model ids are
+    # the Hub repo ids, optionally with a `:provider` suffix to pin one.
+    _compat(
+        "huggingface",
+        "Hugging Face (Inference Providers)",
+        base_url="https://router.huggingface.co/v1",
+        recommended_model="zai-org/GLM-5.2",
+        env_key="HF_TOKEN",
+        endpoint_help="Prefilled with the Inference Providers router. Model ids are Hugging Face repo ids, e.g. zai-org/GLM-5.2.",
+    ),
+    _compat(
+        "cohere",
+        "Cohere",
+        base_url="https://api.cohere.ai/compatibility/v1",
+        recommended_model="command-a-plus-05-2026",
+        env_key="COHERE_API_KEY",
+        endpoint_help="Prefilled with Cohere's Compatibility API, which speaks the OpenAI chat format.",
+    ),
+    _compat(
+        "siliconflow",
+        "SiliconFlow",
+        base_url="https://api.siliconflow.com/v1",
+        recommended_model="zai-org/GLM-5.2",
+        env_key="SILICONFLOW_API_KEY",
+        endpoint_help="Prefilled with SiliconFlow's international endpoint. China mainland: https://api.siliconflow.cn/v1 (keys from cloud.siliconflow.cn).",
+    ),
     ProviderDescriptor(
         name="ollama",
         title="Ollama",
@@ -889,28 +973,165 @@ DESCRIPTORS: list[ProviderDescriptor] = [
         blurb="The LM Studio app's local server, with whatever models you downloaded there.",
         kind="local",
     ),
+    # Three more OpenAI-compatible local servers (2026-10-26). Defaults read from each
+    # tool's own docs: docs.jan.ai/desktop/api-server (127.0.0.1:1337, /v1 prefix),
+    # docs.docker.com/ai/model-runner/api-reference (localhost:12434/engines/v1),
+    # mlx-lm's server.py (127.0.0.1:8080). No recommended model: each serves whatever the
+    # user loaded, and the picker lists that.
+    ProviderDescriptor(
+        name="jan",
+        title="Jan",
+        needs_key=False,
+        fields=[
+            ProviderField(
+                "base_url",
+                "Server address",
+                secret=False,
+                required=False,
+                placeholder="http://127.0.0.1:1337",
+                help="Where Jan's local API server is listening (Settings ▸ Local API Server ▸ "
+                "Start Server). The /v1 path is added automatically.",
+            ),
+            ProviderField(
+                "api_key",
+                "API key (only if you set one in Jan's server settings)",
+                secret=True,
+                required=False,
+            ),
+        ],
+        build=_local_server("jan"),
+        blurb="The Jan app's local API server, with the models you downloaded there.",
+        kind="local",
+    ),
+    ProviderDescriptor(
+        name="docker",
+        title="Docker Model Runner",
+        needs_key=False,
+        fields=[
+            ProviderField(
+                "base_url",
+                "Server address",
+                secret=False,
+                required=False,
+                placeholder="http://localhost:12434/engines",
+                help="Docker Model Runner's TCP address (enable it in Docker Desktop ▸ Settings ▸ "
+                "AI, or `docker desktop enable model-runner --tcp 12434`). The /engines/v1 path "
+                "is added automatically.",
+            ),
+            ProviderField(
+                "api_key",
+                "API key (only if the runner was started with one)",
+                secret=True,
+                required=False,
+            ),
+        ],
+        build=_local_server("docker"),
+        blurb="Models pulled with `docker model pull`, served by Docker Desktop.",
+        kind="local",
+    ),
+    ProviderDescriptor(
+        name="mlx",
+        title="mlx-lm",
+        needs_key=False,
+        fields=[
+            ProviderField(
+                "base_url",
+                "Server address",
+                secret=False,
+                required=False,
+                placeholder="http://127.0.0.1:8080",
+                help="Where `mlx_lm.server` is listening. It defaults to port 8080, the same as "
+                "llama.cpp — if you run both, start one on another port "
+                "(`mlx_lm.server --port 8081`). The /v1 path is added automatically.",
+            ),
+            ProviderField(
+                "api_key",
+                "API key (only if the server was started with one)",
+                secret=True,
+                required=False,
+            ),
+        ],
+        build=_local_server("mlx"),
+        blurb="An mlx-lm server on Apple silicon (`pip install mlx-lm`, then `mlx_lm.server --model <repo>`).",
+        kind="local",
+    ),
 ]
 
 _BY_NAME = {d.name: d for d in DESCRIPTORS}
 
 
-def provider_descriptors() -> list[ProviderDescriptor]:
-    return list(DESCRIPTORS)
+def _custom_provider_titles(secrets: Any = None) -> dict[str, str]:
+    """Return the validated custom-provider index without exposing credentials."""
+    if secrets is None:
+        return {}
+    raw = secrets.get(CUSTOM_PROVIDERS_PROFILE) or {}
+    providers = raw.get("providers") if isinstance(raw, dict) else None
+    if not isinstance(providers, dict):
+        return {}
+    return {
+        name: title
+        for name, title in providers.items()
+        if isinstance(name, str)
+        and isinstance(title, str)
+        and name not in _BY_NAME
+        and title.strip()
+    }
 
 
-def provider_names() -> list[str]:
-    return [d.name for d in DESCRIPTORS]
+def _removed_custom_provider_titles(secrets: Any = None) -> dict[str, str]:
+    """Routes kept as tombstones after deletion to protect existing sessions."""
+    if secrets is None:
+        return {}
+    raw = secrets.get(CUSTOM_PROVIDERS_PROFILE) or {}
+    removed = raw.get("removed") if isinstance(raw, dict) else None
+    if not isinstance(removed, dict):
+        return {}
+    return {
+        name: title
+        for name, title in removed.items()
+        if isinstance(name, str)
+        and isinstance(title, str)
+        and name not in _BY_NAME
+        and title.strip()
+    }
 
 
-def get_descriptor(name: str) -> Optional[ProviderDescriptor]:
-    return _BY_NAME.get(name)
+def is_custom_provider(name: str, secrets: Any = None) -> bool:
+    return name in _custom_provider_titles(secrets)
+
+
+def is_removed_custom_provider(name: str, secrets: Any = None) -> bool:
+    return name in _removed_custom_provider_titles(secrets)
+
+
+def provider_descriptors(secrets: Any = None) -> list[ProviderDescriptor]:
+    custom = [
+        _custom_provider_descriptor(name, title)
+        for name, title in _custom_provider_titles(secrets).items()
+    ]
+    return [*DESCRIPTORS, *custom]
+
+
+def provider_names(secrets: Any = None) -> list[str]:
+    return [d.name for d in provider_descriptors(secrets)]
+
+
+def get_descriptor(name: str, secrets: Any = None) -> Optional[ProviderDescriptor]:
+    builtin = _BY_NAME.get(name)
+    if builtin is not None:
+        return builtin
+    title = _custom_provider_titles(secrets).get(name)
+    if title:
+        return _custom_provider_descriptor(name, title)
+    title = _removed_custom_provider_titles(secrets).get(name)
+    return _disabled_custom_provider_descriptor(name, title) if title else None
 
 
 def build_provider_client(
     name: str, profile: dict[str, Any], secrets: Any
 ) -> ProviderClient:
     """Build a `ProviderClient` for `name` from its stored profile. Unknown → OpenAI default."""
-    descriptor = _BY_NAME.get(name) or _BY_NAME["openai"]
+    descriptor = get_descriptor(name, secrets) or _BY_NAME["openai"]
     return descriptor.build(profile or {}, secrets)
 
 
@@ -1180,6 +1401,7 @@ def verify_provider_key(
     base_url: Optional[str] = None,
     fields: Optional[dict[str, Any]] = None,
     timeout: float = 10.0,
+    descriptor: Optional[ProviderDescriptor] = None,
 ) -> dict[str, Any]:
     """Validate a provider's credentials with one cheap call — usually list models.
 
@@ -1190,7 +1412,7 @@ def verify_provider_key(
     """
     import httpx
 
-    d = _BY_NAME.get(name) or _BY_NAME["openai"]
+    d = descriptor or _BY_NAME.get(name) or _BY_NAME["openai"]
     key = (api_key or "").strip()
     if d.auth == "oauth":
         # OAuth providers verify from their stored tokens (needs the SecretStore),
@@ -1216,7 +1438,7 @@ def verify_provider_key(
         elif name == "ollama":
             base = _normalize_ollama_url(base_url)
             resp = httpx.get(base.rstrip("/") + "/models", timeout=timeout)
-        elif name in ("llamacpp", "vllm", "lmstudio"):
+        elif name in LOCAL_SERVERS:
             from .local_server import v1_base
 
             headers = {"Authorization": f"Bearer {key}"} if key else {}
@@ -1306,6 +1528,14 @@ def verify_provider_key(
 
     if resp.status_code < 300:
         return {"ok": True}
+    if resp.status_code in (404, 405) and d.name not in _BY_NAME:
+        # Chat Completions compatibility does not require the optional model-list
+        # endpoint. The gateway was reached, so do not call a usable custom route
+        # invalid merely because it cannot provide a catalog.
+        return {
+            "ok": True,
+            "warning": "Endpoint reached, but it does not expose /models. Add a model ID and try a chat to finish checking it.",
+        }
     if resp.status_code in (401, 403):
         if name == "ollama":
             return {"ok": False, "error": "Server rejected the request."}

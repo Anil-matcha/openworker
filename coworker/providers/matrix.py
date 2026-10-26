@@ -17,7 +17,8 @@ showing a made-up denominator. Values entered 2026-07-28 from vendor docs; verif
 the id refresh.
 
 Resellers: Together + Fireworks + OpenRouter + Nebius + OrcaRouter + NVIDIA NIM
-+ Groq (landed 2026-10-25, after the deferral of 2026-07-04).
++ Groq (landed 2026-10-25, after the deferral of 2026-07-04) + Cerebras, Hugging Face
+Inference Providers and SiliconFlow (2026-10-26).
 """
 
 from __future__ import annotations
@@ -221,6 +222,19 @@ MATRIX: dict[str, ModelEntry] = {
     # 2026-08-12 and solar-pro3 retires 2026-10-30 (docs/models/history).
     "upstage:solar-pro4": ModelEntry("Solar Pro 4 · Upstage", _AGENTIC, 512_000),
     "upstage:solar-mini4": ModelEntry("Solar Mini 4 · Upstage", _AGENTIC, 512_000),
+    # -- Cerebras / Hugging Face / Cohere / SiliconFlow (added 2026-10-26) --------
+    # Cerebras: inference-docs.cerebras.ai/models/openai-oss — "Tool Calling" listed,
+    # "65k tokens (free tier), 131k tokens (paid)"; the paid window is stored.
+    "cerebras:gpt-oss-120b": ModelEntry("GPT-OSS 120B · via Cerebras", _AGENTIC, 131_072),
+    # Hugging Face Inference Providers: router.huggingface.co/v1/models (public listing)
+    # reports supports_tools=true and context_length 1048576 for GLM-5.2 at its providers.
+    "huggingface:zai-org/GLM-5.2": ModelEntry("GLM-5.2 · via Hugging Face", _AGENTIC, 1_048_576),
+    # Cohere: docs.cohere.com/docs/models lists command-a-plus-05-2026 at 128k; the
+    # tool-use guide and the Compatibility API docs use this id in their examples.
+    "cohere:command-a-plus-05-2026": ModelEntry("Command A+ · Cohere", _AGENTIC, 128_000),
+    # SiliconFlow: siliconflow.com/blog/glm-5-2-api-guide — id zai-org/GLM-5.2, "1M-token
+    # context window" (pricing table: 1049K); tool calling among the listed workflows.
+    "siliconflow:zai-org/GLM-5.2": ModelEntry("GLM-5.2 · via SiliconFlow", _AGENTIC, 1_048_576),
     # -- SambaNova ---------------------------------------------------------------
     # SambaCloud's OpenAI-compatible API; ids and windows are the `context_length` values
     # api.sambanova.ai/v1/models reports (keyless, read 2026-10-25). The two 128k rows are

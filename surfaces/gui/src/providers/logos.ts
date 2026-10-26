@@ -87,6 +87,11 @@ export const PROVIDER_ORDER = [
   "llamacpp",
   "vllm",
   "lmstudio",
+  // Jan, Docker Model Runner and mlx-lm carry no mark yet: the gallery shows the
+  // neutral monogram (see ProviderMark).
+  "jan",
+  "docker",
+  "mlx",
   "bedrock",
   "vertex",
   "openrouter",
@@ -108,6 +113,11 @@ export const PROVIDER_ORDER = [
   "novita",
   "groq",
   "upstage",
+  // No vendored marks yet for these four: the gallery shows the neutral monogram.
+  "cerebras",
+  "huggingface",
+  "cohere",
+  "siliconflow",
 ];
 
 export function providerRank(name: string): number {
