@@ -25,6 +25,8 @@ its Python harness; this directory is additive.
   REST/SSE, PostgreSQL, workers and deployment references.
 - **[Coding tools and unattended sessions](../docs/harness/CODING-TOOLS.md)** —
   file editing/search, managed preview processes and auto-skip questions.
+- **[Memory and scheduling](../docs/harness/ASSISTANT-TOOLS.md)** — opt-in durable
+  learner memory and scheduled work on SQLite or PostgreSQL.
 - **[Python/Rust tool survey](../docs/harness/TOOL-PARITY.md)** — remaining parity gaps.
 
 ## What the harness handles

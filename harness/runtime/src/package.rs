@@ -25,6 +25,12 @@ pub struct Manifest {
     /// Opt-in session bookkeeping, not permission to execute planned actions.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub planning: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub memory: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub memory_scope: Option<String>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub scheduling: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub team_role: Option<crate::teams::Role>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -61,6 +67,17 @@ pub fn parse(text: &str) -> Result<(Manifest, String)> {
         serde_yaml::from_str(header).context("Invalid/unsupported native coworker manifest")?;
     if m.schema_version != 1 {
         bail!("Unsupported coworker schema_version; expected 1");
+    }
+    if let Some(scope) = &m.memory_scope {
+        if !m.memory
+            || scope.is_empty()
+            || scope.len() > 128
+            || !scope
+                .bytes()
+                .all(|c| c.is_ascii_alphanumeric() || b"-_:./".contains(&c))
+        {
+            bail!("memory_scope requires enabled memory and a bounded application-owned ASCII identifier");
+        }
     }
     if !crate::bundle::safe_name(&m.id) || m.id.len() > 64 || body.is_empty() {
         bail!("Coworker requires a bounded safe ID and nonempty instructions");

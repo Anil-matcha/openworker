@@ -6,7 +6,7 @@ use std::{
 };
 const MAX_FILE: u64 = 1024 * 1024;
 const LOCK: &str = ".openworker-coding.lock";
-fn edit_lock(root: &Path) -> Result<std::fs::File> {
+pub(super) fn edit_lock(root: &Path) -> Result<std::fs::File> {
     let path = crate::runner::path(root, LOCK)?;
     if let Ok(meta) = path.symlink_metadata() {
         ensure!(
@@ -38,7 +38,7 @@ fn edit_lock(root: &Path) -> Result<std::fs::File> {
         .context("Another coding edit is in progress; retry after reading the file")?;
     Ok(file)
 }
-fn text(path: &Path) -> Result<String> {
+pub(super) fn text(path: &Path) -> Result<String> {
     String::from_utf8(crate::bundle::read_limited(path, MAX_FILE as usize)?)
         .context("UTF-8 file required (maximum 1 MiB)")
 }
@@ -57,7 +57,7 @@ fn expected(args: &Value, current: &str) -> Result<()> {
     }
     Ok(())
 }
-fn write(root: &Path, relative: &str, content: &str, create_only: bool) -> Result<()> {
+pub(super) fn write(root: &Path, relative: &str, content: &str, create_only: bool) -> Result<()> {
     ensure!(content.len() <= MAX_FILE as usize, "File exceeds 1 MiB");
     let target = crate::runner::path(root, relative)?;
     let parent = target.parent().context("Parent required")?;
@@ -101,47 +101,57 @@ fn files(root: &Path, args: &Value) -> Result<(Vec<PathBuf>, bool)> {
         crate::runner::path(root, relative)?
     };
     ensure!(start.is_dir(), "Directory required");
-    let hidden = args["include_hidden"] == true;
-    let mut stack = vec![(start, 0)];
+    // Walk from the workspace to retain its ignore rules for subdirectory searches,
+    // pruning unrelated branches without consulting parents outside the workspace.
+    let max_depth = start.strip_prefix(root)?.components().count()
+        + if args["recursive"] == false { 1 } else { 16 };
+    let mut walker = ignore::WalkBuilder::new(root);
+    walker
+        .hidden(args["include_hidden"] != true)
+        .parents(false)
+        .git_global(false)
+        .git_ignore(args["respect_gitignore"] != false)
+        .git_exclude(args["respect_gitignore"] != false)
+        .ignore(args["respect_gitignore"] != false)
+        .require_git(false)
+        .follow_links(false)
+        .max_depth(Some(max_depth));
+    let filter = if let Some(glob) = args["glob"].as_str() {
+        ensure!(glob.len() <= 1000, "Glob too large");
+        Some(
+            globset::Glob::new(glob)
+                .context("Invalid file glob")?
+                .compile_matcher(),
+        )
+    } else {
+        None
+    };
+    let selected = start.clone();
+    walker.filter_entry(move |e| {
+        (selected.starts_with(e.path()) || e.path().starts_with(&selected))
+            && !matches!(
+                e.file_name().to_str(),
+                Some(".git" | "node_modules" | "target" | ".openworker-coding.lock")
+            )
+    });
     let mut out = vec![];
-    let mut scanned = 0;
     let mut truncated = false;
-    while let Some((dir, depth)) = stack.pop() {
-        // Bound enumeration itself, not only the returned result.
-        let mut entries = vec![];
-        for entry in std::fs::read_dir(dir)? {
-            scanned += 1;
-            if scanned > 10000 {
-                truncated = true;
-                break;
-            }
-            entries.push(entry?);
-        }
-        entries.sort_by_key(|e| e.file_name());
-        for e in entries {
-            let name = e.file_name();
-            let name = name.to_string_lossy();
-            if (!hidden && name.starts_with('.'))
-                || matches!(name.as_ref(), ".git" | "node_modules" | "target")
-            {
-                continue;
-            }
-            let meta = e.file_type()?;
-            if meta.is_symlink() || crate::platform::linked(&e.metadata()?) {
-                continue;
-            }
-            if meta.is_dir() {
-                if depth < 16 {
-                    stack.push((e.path(), depth + 1));
-                } else {
-                    truncated = true;
-                }
-            } else if meta.is_file() {
-                out.push(e.path());
-            }
-        }
-        if scanned > 10000 {
+    for (n, entry) in walker.build().enumerate() {
+        if n >= 10000 {
+            truncated = true;
             break;
+        }
+        let e = entry.context("Cannot traverse directory")?;
+        if e.depth() == max_depth && e.file_type().is_some_and(|t| t.is_dir()) {
+            truncated = true;
+        }
+        if e.file_type().is_some_and(|t| t.is_file())
+            && !crate::platform::linked(&e.metadata()?)
+            && filter
+                .as_ref()
+                .is_none_or(|f| f.is_match(e.path().strip_prefix(&start).unwrap_or(e.path())))
+        {
+            out.push(e.into_path());
         }
     }
     out.sort();
@@ -216,6 +226,17 @@ pub fn call(root: &Path, name: &str, args: &Value) -> Result<Value> {
             }
             let query = bounded(args, "query", 1000)?;
             ensure!(!query.is_empty(), "Nonempty query required");
+            let pattern = if args["regex"] == true {
+                query
+            } else {
+                regex::escape(&query)
+            };
+            let pattern = regex::RegexBuilder::new(&pattern)
+                .case_insensitive(args["case_sensitive"] == false)
+                .size_limit(1_000_000)
+                .dfa_size_limit(1_000_000)
+                .build()
+                .context("Invalid or oversized search expression")?;
             let mut matches = vec![];
             let mut read = 0;
             let mut skipped = 0;
@@ -236,8 +257,8 @@ pub fn call(root: &Path, name: &str, args: &Value) -> Result<Value> {
                     continue;
                 }
                 for (i, line) in content.lines().enumerate() {
-                    if line.contains(&query) {
-                        if matches.len() >= limit || matches.len() >= 100 {
+                    if pattern.is_match(line) {
+                        if matches.len() >= limit {
                             truncated = true;
                             break 'scan;
                         }

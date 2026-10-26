@@ -1,4 +1,5 @@
 pub mod anthropic;
+pub mod assistant_tools;
 pub mod bundle;
 pub mod chat_completions;
 pub mod cli;

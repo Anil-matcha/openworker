@@ -151,6 +151,9 @@ export function agentWire(a: Agent, depth = 0): object {
     provider: a.provider,
     fallback_model: a.fallbackModel,
     planning: a.planning,
+    memory: a.memory ?? (a.memoryScope !== undefined ? true : undefined),
+    memory_scope: a.memoryScope,
+    scheduling: a.scheduling,
     auto_skip_questions: a.autoSkipQuestions,
     approvals:
       a.approvals?.mode === "auto"

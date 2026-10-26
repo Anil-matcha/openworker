@@ -67,7 +67,8 @@ fn manifest_is_versioned_strict_and_preserves_markdown() {
         "requires_folder: false\n",
         "default_permission_mode: bypass\n",
         "subagents: true\n",
-        "scheduling: true\n",
+        "scheduling: all\n",
+        "memory_scope: learner-without-enabled-memory\n",
         "connectors: all\n",
         "models: [foo]\n",
         "skills: [x, x]\n",
@@ -84,6 +85,12 @@ fn manifest_is_versioned_strict_and_preserves_markdown() {
     assert!(package::parse("---\nid: x\n").is_err());
     assert!(package::parse("---\nid: x\nversion: [1]\n---\nBody").is_err());
     assert!(package::parse("---\nid: x\ndescription: *missing\n---\nBody").is_err());
+    let (manifest, _) = package::parse(&format!(
+        "{base}memory: true\nmemory_scope: learner/workspace\nscheduling: true\n{tail}"
+    ))
+    .unwrap();
+    assert!(manifest.memory && manifest.scheduling);
+    assert_eq!(manifest.memory_scope.as_deref(), Some("learner/workspace"));
 }
 
 #[test]

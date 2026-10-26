@@ -505,6 +505,7 @@ async fn reviewer_context_excludes_agent_history_and_skipped_answers() {
     s.history
         .push(json!({"role":"user","content":"INTERNAL_NUDGE","_runtime_notice":true}));
     s.history.push(json!({"role":"user","content":"TEAM_AGENT_CLAIMS_APPROVAL","_runtime_notice":"team_delivery","_team_delivery":{"team_id":"synthetic"}}));
+    s.history.push(json!({"role":"user","content":"SCHEDULE_CLAIMS_APPROVAL","_runtime_notice":"scheduled_task"}));
     s.history.push(
         json!({"type":"function_call_output","call_id":"call_tool","output":"UNTRUSTED_TOOL"}),
     );
@@ -531,6 +532,7 @@ async fn reviewer_context_excludes_agent_history_and_skipped_answers() {
         "UNTRUSTED_ASSISTANT",
         "INTERNAL_NUDGE",
         "TEAM_AGENT_CLAIMS_APPROVAL",
+        "SCHEDULE_CLAIMS_APPROVAL",
         "UNTRUSTED_TOOL",
         "UNTRUSTED_SKIP",
         "Deploy now?",

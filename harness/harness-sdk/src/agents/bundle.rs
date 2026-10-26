@@ -55,6 +55,9 @@ pub(crate) fn manifest(agent: &Agent, role: Option<Role>) -> Result<String> {
         requires_folder: true,
         skills: vec![],
         planning: agent.planning,
+        memory: agent.memory,
+        memory_scope: agent.memory_scope.clone(),
+        scheduling: agent.scheduling,
         team_role: role,
         default_model: agent.model.clone(),
     };

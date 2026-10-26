@@ -81,6 +81,10 @@ export interface Agent {
   provider?: Provider;
   fallbackModel?: string;
   planning?: boolean;
+  memory?: boolean;
+  /** Application-owned scope, never a model-selected learner/workspace ID. */
+  memoryScope?: string;
+  scheduling?: boolean;
   approvals?: Approvals;
   /** Skip structured ask_user calls without changing tool approvals. */
   autoSkipQuestions?: boolean;
@@ -221,8 +225,8 @@ export interface SessionState {
   runId: string | null;
   active: Json[];
   pending: Interruption[];
-  timers: null;
-  capabilities: { steering: false; timers: false };
+  timers: { id: string; nextRunAt: number; remainingRuns: number }[] | null;
+  capabilities: { steering: false; timers: boolean };
   canAcceptMessage: boolean;
   lastOutcome: string | null;
   cursor: number;

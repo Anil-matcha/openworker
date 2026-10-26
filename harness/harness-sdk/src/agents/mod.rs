@@ -120,6 +120,7 @@ pub struct Agent {
     #[serde(default)]
     pub(crate) description: String,
     pub(crate) instructions: String,
+    #[serde(default)]
     pub(crate) tools: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) model: Option<ModelChoice>,
@@ -129,6 +130,12 @@ pub struct Agent {
     pub(crate) fallback_model: String,
     #[serde(default)]
     pub(crate) planning: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub(crate) memory: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) memory_scope: Option<String>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub(crate) scheduling: bool,
     #[serde(default)]
     pub(crate) approvals: Approvals,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
@@ -160,6 +167,9 @@ impl Agent {
             provider: ProviderKind::Openai,
             fallback_model: default_fallback_model(),
             planning: false,
+            memory: false,
+            memory_scope: None,
+            scheduling: false,
             approvals: Approvals::default(),
             auto_skip_questions: false,
             subagents: vec![],
@@ -238,6 +248,21 @@ impl Agent {
         self.approvals = approvals;
         self
     }
+    /// Enable durable memory tools; shared scope IDs are assigned by the app.
+    pub fn memory(mut self, enabled: bool) -> Self {
+        self.memory = enabled;
+        self
+    }
+    pub fn memory_scope(mut self, scope: impl Into<String>) -> Self {
+        self.memory = true;
+        self.memory_scope = Some(scope.into());
+        self
+    }
+    /// Enable bounded schedules driven by the SDK host while it runs.
+    pub fn scheduling(mut self, enabled: bool) -> Self {
+        self.scheduling = enabled;
+        self
+    }
     /// Return a recorded "no human answer available" result instead of parking
     /// ask_user. This does not approve tools or invent an answer.
     pub fn auto_skip_questions(mut self, enabled: bool) -> Self {
@@ -281,9 +306,11 @@ impl Agent {
         if self.instructions.trim().is_empty() {
             return bad(format!("Agent {} needs instructions", self.id));
         }
-        if self.tools.is_empty() || self.tools.len() > 64 {
+        if (self.tools.is_empty() && !self.memory && !self.scheduling && !self.planning)
+            || self.tools.len() > 64
+        {
             return bad(format!(
-                "Agent {} needs 1–64 tools (the engine requires at least one bound tool)",
+                "Agent {} needs at most 64 tools and at least one tool or an enabled planning, memory or scheduling capability",
                 self.id
             ));
         }

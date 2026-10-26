@@ -1,5 +1,6 @@
 //! Optional PostgreSQL StateStore adapter. No automatic claims, heartbeat or replay.
 mod artifacts;
+mod assistant;
 pub mod auth;
 mod controls;
 mod db;
@@ -516,6 +517,16 @@ impl StateStore for PostgresStore {
     fn team_call(&mut self, sid: &str, tid: &str, call: &Value, args: &Value) -> Result<Event> {
         let (sid, tid, call, args) = (sid.to_owned(), tid.to_owned(), call.clone(), args.clone());
         self.call(move |db| db.team_call(&sid, &tid, call, args))
+    }
+    fn assistant_call(
+        &mut self,
+        sid: &str,
+        tid: &str,
+        call: &Value,
+        args: &Value,
+    ) -> Result<Event> {
+        let (sid, tid, call, args) = (sid.to_owned(), tid.to_owned(), call.clone(), args.clone());
+        self.call(move |db| db.assistant_call(&sid, &tid, &call, &args))
     }
     fn environment(&self, id: &str) -> Result<openworker_runtime::environment::Record> {
         let id = id.to_owned();

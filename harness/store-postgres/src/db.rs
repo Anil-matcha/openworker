@@ -108,6 +108,7 @@ pub(crate) fn migrate(config: &Config) -> Result<()> {
     crate::auth::migrate(&mut tx)?;
     crate::pools::migrate(&mut tx)?;
     crate::teams::migrate(&mut tx)?;
+    crate::assistant::migrate(&mut tx)?;
     tx.batch_execute("CREATE TABLE IF NOT EXISTS sdk_host_mode(singleton BOOLEAN PRIMARY KEY CHECK(singleton), mode TEXT NOT NULL CHECK(mode='sdk'))")?;
     tx.commit()?;
     Ok(())
@@ -776,6 +777,14 @@ impl Database {
             }
         }
         let mut input = json!({"role":"user","content":text});
+        if openworker_runtime::assistant_tools::admit(
+            &mut s,
+            key,
+            text,
+            openworker_runtime::assistant_tools::now(),
+        )? {
+            input["_runtime_notice"] = json!("scheduled_task");
+        }
         if let Some(delivery) = crate::team_execution::notice(&mut tx, sid, key)? {
             input["_runtime_notice"] = json!("team_delivery");
             input["_team_delivery"] = delivery;

@@ -630,8 +630,10 @@ export class Session {
       runId: value.run_id as string | null,
       active: value.active as Json[],
       pending: (value.pending as unknown[]).map(interruptionOf),
-      timers: null,
-      capabilities: { steering: false, timers: false },
+      timers: Array.isArray(value.timers) ? value.timers.map((v) => {
+        const t=record(v); return {id:String(t.id),nextRunAt:Number(t.next_run_at),remainingRuns:Number(t.remaining_runs)};
+      }) : null,
+      capabilities: { steering: false, timers: record(value.capabilities ?? {}).timers === true },
       canAcceptMessage: value.can_accept_message === true,
       lastOutcome: value.last_outcome as string | null,
       cursor: Number(value.cursor),

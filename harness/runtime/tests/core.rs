@@ -42,6 +42,7 @@ fn session() -> Session {
         skills: vec![],
         loaded_skills: Default::default(),
         plan: None,
+        schedules: vec![],
         resource_policy: Default::default(),
     }
 }

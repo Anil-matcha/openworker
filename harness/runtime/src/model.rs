@@ -506,7 +506,14 @@ impl Model {
         // Explicit scripted-only resource integration fixture; never a live-model path.
         if let Some(plan) = history
             .get(start)
-            .and_then(|v| v["content"].as_str())
+            .and_then(|v| {
+                let content = v["content"].as_str()?;
+                if v["_runtime_notice"] == "scheduled_task" {
+                    content.strip_prefix(crate::assistant_tools::SCHEDULE_PREFIX)
+                } else {
+                    Some(content)
+                }
+            })
             .and_then(|s| s.strip_prefix("TEST_RESOURCE_GRANTS "))
         {
             let steps: Vec<Value> = serde_json::from_str(plan)?;

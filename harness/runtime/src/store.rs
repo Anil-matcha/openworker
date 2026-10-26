@@ -102,6 +102,8 @@ pub struct Session {
     pub loaded_skills: std::collections::BTreeSet<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub plan: Option<crate::planning::Plan>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub schedules: Vec<crate::assistant_tools::Schedule>,
     pub resource_policy: crate::resource_policy::Resolved,
 }
 fn revision_is_zero(revision: &i64) -> bool {
@@ -147,6 +149,15 @@ pub struct Event {
 /// the runtime safe for shared workers. `recover` may only touch sessions owned
 /// exclusively by this store instance. No automatic replay of tool effects.
 pub trait StateStore: Send {
+    fn assistant_call(
+        &mut self,
+        _sid: &str,
+        _tid: &str,
+        _call: &Value,
+        _args: &Value,
+    ) -> Result<Event> {
+        bail!("This storage adapter does not implement memory/scheduling tools")
+    }
     /// Latest durable SDK run receipt, optionally for a particular submission.
     /// Receipts use the ordinary fenced journal, not a second persistence path.
     fn agent_run(&self, _sid: &str, _submission: Option<&str>) -> Result<Option<Value>> {
@@ -269,6 +280,8 @@ pub struct Store {
     db: Connection,
     _lock: Option<std::fs::File>,
 }
+#[path = "sqlite_assistant.rs"]
+mod sqlite_assistant;
 #[path = "sqlite_teams.rs"]
 mod sqlite_teams;
 pub fn terminal(s: &str) -> bool {
@@ -322,6 +335,7 @@ impl Store {
             PRAGMA user_version=7;
             COMMIT;")?;
         sqlite_teams::migrate(&db)?;
+        sqlite_assistant::migrate(&db)?;
         Ok(Self { db, _lock: lock })
     }
     pub fn get(&self, id: &str) -> Result<Session> {
@@ -658,6 +672,9 @@ impl Store {
             }
         }
         let mut input = json!({"role":"user","content":text});
+        if crate::assistant_tools::admit(&mut s, key, text, crate::assistant_tools::now())? {
+            input["_runtime_notice"] = json!("scheduled_task");
+        }
         if let Some(delivery) = sqlite_teams::notice(&self.db, sid, key)? {
             let expected: String = self.db.query_row(
                 "SELECT text FROM team_queue WHERE session_id=? AND id=?",
@@ -776,6 +793,15 @@ impl Store {
 }
 
 impl StateStore for Store {
+    fn assistant_call(
+        &mut self,
+        sid: &str,
+        tid: &str,
+        call: &Value,
+        args: &Value,
+    ) -> Result<Event> {
+        Store::assistant_call(self, sid, tid, call, args)
+    }
     fn agent_run(&self, sid: &str, submission: Option<&str>) -> Result<Option<Value>> {
         self.metadata(sid)?;
         let raw: Option<String> = self.db.query_row(

@@ -316,12 +316,15 @@ impl Bundle {
         } else {
             None
         };
-        if tools.bindings.is_empty() || tools.bindings.len() > 64 {
+        if (tools.bindings.is_empty() && !meta.memory && !meta.scheduling && !meta.planning)
+            || tools.bindings.len() > 64
+        {
             bail!("Invalid server or binding count");
         }
         for (alias, b) in &tools.bindings {
             if !safe_name(alias)
                 || crate::teams::internal(alias)
+                || crate::assistant_tools::internal(alias)
                 || matches!(
                     alias.as_str(),
                     "ask_user"
@@ -414,8 +417,8 @@ fn resolve_registered(raw: &[u8], registry: &openworker_tools::ToolRegistry) -> 
         tools: Vec<String>,
     }
     let selection: Selection = serde_json::from_slice(raw)?;
-    if selection.version != 3 || selection.tools.is_empty() || selection.tools.len() > 64 {
-        bail!("Require 1–64 qualified tool names");
+    if selection.version != 3 || selection.tools.len() > 64 {
+        bail!("Require at most 64 qualified tool names");
     }
     let mut servers = BTreeMap::new();
     let mut bindings = BTreeMap::new();

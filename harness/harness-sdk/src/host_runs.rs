@@ -370,8 +370,15 @@ impl Host {
         };
         let run = self.store.lock().unwrap().agent_run(sid, None)?;
         let last_outcome = lead["turn"]["status"].as_str().filter(|s| terminal(s));
+        let timers_enabled = lead["session"]["package"]["scheduling"] == true;
+        let timers = if timers_enabled {
+            json!(lead["schedules"].as_array().into_iter().flatten()
+            .filter(|v|v["status"]=="active").map(|v|json!({"id":v["id"],"next_run_at":v["next_run_at"],"remaining_runs":v["max_runs"].as_u64().unwrap_or(0).saturating_sub(v["fired"].as_u64().unwrap_or(0))})).collect::<Vec<_>>())
+        } else {
+            Value::Null
+        };
         Ok(
-            json!({"status":status,"run_id":run.as_ref().map(|r|&r["submission_id"]),"active":active,"pending":pending,"timers":null,"capabilities":{"steering":false,"timers":false},"can_accept_message":status=="idle","last_outcome":last_outcome,"cursor":lead["cursor"],"cursors":cursors,"board":board}),
+            json!({"status":status,"run_id":run.as_ref().map(|r|&r["submission_id"]),"active":active,"pending":pending,"timers":timers,"capabilities":{"steering":false,"timers":timers_enabled},"can_accept_message":status=="idle","last_outcome":last_outcome,"cursor":lead["cursor"],"cursors":cursors,"board":board}),
         )
     }
 

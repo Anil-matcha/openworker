@@ -73,6 +73,23 @@ active phases, pending interactions, `can_accept_message`, and a terminal outcom
 only when the current turn is terminal. Recoverable work is not falsely idle.
 `timers:null` and capabilities `steering:false,timers:false` mean unsupported.
 
+Agent definitions also accept `memory` (default false), `memory_scope` (optional
+trusted application sharing ID) and `scheduling` (default false). A scope requires
+memory enabled; TypeScript `memoryScope` and Rust `.memory_scope()` enable it.
+External `tools` may be omitted when memory, scheduling or planning is enabled.
+Initialize advertises `memory_tools` and `scheduled_tasks`. These flags add
+internal model tools, not external registry bindings. See
+[memory and scheduling](ASSISTANT-TOOLS.md) for bounds and storage semantics.
+
+When scheduling is enabled, `session/state` returns `capabilities.timers:true`
+and `timers:[{id,next_run_at,remaining_runs}]` for that session. Timestamps are UTC
+Unix seconds; an empty list means no active schedules. TypeScript maps the fields
+to `nextRunAt`/`remainingRuns`. The SDK host admits due work through normal
+`turn/start` with a reserved `ow-schedule/` submission ID and an agent-authored
+history marker. The database validates the exact due task and commits delivery
+with turn admission. Standalone server-reference workers do not dispatch these
+timers automatically.
+
 App-local catalogs/provider metadata remain under state_dir even with PostgreSQL
 sessions. For multi-node deployments provision consistent registries/providers on
 each worker. Choosing PostgreSQL does not turn parent-process callbacks into RPC

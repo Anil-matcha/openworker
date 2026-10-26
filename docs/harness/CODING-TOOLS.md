@@ -40,9 +40,13 @@ const coder = harness.createAgent({
   defaultModel: { provider: "OpenAI", name: selectedModelId },
   approvals: { mode: "never" },
   autoSkipQuestions: true,
+  memoryScope: learnerWorkspaceId, // App-owned opaque ID; never a model argument.
+  scheduling: true,
   tools: [
     "coding.read_file", "coding.write_file", "coding.edit_file",
-    "coding.list_files", "coding.search_files", "coding.run_shell",
+    "coding.list_files", "coding.search_files", "coding.apply_patch",
+    "coding.git_status", "coding.git_diff", "coding.git_log",
+    "coding.web_fetch", "coding.run_shell",
     "coding.process_start", "coding.process_status",
     "coding.process_logs", "coding.process_stop",
   ],
@@ -107,8 +111,11 @@ means bypass, while auto-review may still park a tool call for human judgment.
 | `read_file` | UTF-8 lines with zero-based offset, bounded output and whole-file SHA-256. Files limited to 1 MiB; long-line clipping is explicit. |
 | `write_file` | Atomic file replacement, optional `create_only` and `expected_sha256`. |
 | `edit_file` | Exact single-occurrence replacement with required `expected_sha256`; rejects stale or ambiguous edits. |
-| `list_files` | Sorted, bounded recursive listing; optional subdirectory and hidden files. Skips symlinks, `.git`, `node_modules`, `target`. |
-| `search_files` | Bounded literal text search with file/line results; skips binary/large files. Not regex or `.gitignore` parity yet. |
+| `list_files` | Sorted, bounded listing with glob, recursion, hidden-file and `.gitignore` options. Skips symlinks, `.git`, `node_modules`, `target`. |
+| `search_files` | Bounded literal or regex search, case sensitivity, glob filters and `.gitignore` awareness; file/line results, skips binary/large files. |
+| `apply_patch` | Exact Codex-style or unified text patches; add/update/delete, optional `expected_hashes`, validates every file before writing. |
+| `git_status`, `git_diff`, `git_log` | Bounded read-only Git inspection, with repository external helpers disabled. Requires Git installed. |
+| `web_fetch` | Public HTTPS text/HTML/JSON extraction; bounded body, timeout and redirects. No browser, authentication or search engine. |
 | `run_shell` | Fresh shell in workspace; returns exit information or a tracked process ID after `yield_ms` (default 1,000, max 10,000). |
 | `process_start` | Starts a tracked server/build immediately; default lifetime 3,600 seconds. |
 | `process_status` | Running/exited/stopped/timed-out status and exit code, when available. |
@@ -137,6 +144,36 @@ poll the returned process ID. Output buffers and the number of live processes
 are bounded (8 live, up to 64 retained records per runner); completed records can
 be evicted. Logs are transient snapshots, not a durable audit archive.
 
+## Search, patches and web access
+
+Search defaults to literal, case-sensitive, recursive and ignore-aware. Set
+`regex`, `case_sensitive`, `glob`, `recursive`, `respect_gitignore` or
+`include_hidden` explicitly. The walk is capped at 10,000 files and depth 16;
+search reads at most 16 MiB in total. Output is bounded.
+
+Patches accept exact `*** Begin Patch` add/update/delete blocks or numeric unified
+diff hunks. Context must match. Fuzzy section headers, renames, binary diffs and
+no-newline markers are rejected. CRLF and existing final-newline style are preserved
+on updates. Patches are limited to 32 files and 128 KB input. Every file is validated
+first; replacement is atomic per file with best-effort rollback on I/O failure.
+A crash during a multi-file patch can leave some files changed.
+
+Git tools disable external diffs, textconv, hooks, fsmonitor and signature verification.
+Repositories with Git metadata outside the workspace, content filters, included
+configuration or separate worktree configuration are rejected. Git can otherwise
+run clean/process filters during status or diff. These are inspection
+tools; commits, pushes and other mutations require separately authorized shell/tools.
+
+Web fetch permits credential-free public HTTPS on port 443, checks every redirect
+and pins direct DNS resolution. Private/reserved addresses are rejected. A platform
+proxy remains trusted to resolve and enforce its own destination policy. The tool
+uses the runner’s network restrictions; it does not grant network access. It reads
+at most 512 KB and returns at most 16,000 characters, stripping HTML tags/scripts
+without executing them. Results are untrusted source material. It is not a general
+web-search tool or browser, and does not access the local preview server.
+
+See [memory and scheduling](ASSISTANT-TOOLS.md) for opt-in agent capabilities.
+
 ## Process lifetime
 
 Selecting `process_start` or `run_shell` permits the first-party coding runner to
@@ -157,7 +194,7 @@ Tests use real subprocesses and local files with scripted model fixtures, includ
 cross-turn status, question policy overrides, approval denial, timeout, bounded
 logs, cleanup and SDK child-crash recovery. No live model is required.
 
-## Verification (2026-10-26)
+## Earlier coding/process verification (2026-10-26)
 
 - Linux: 175 runtime/SDK tests passed, including 8 coding tests and 2 SDK coding
   tests in embedded/managed modes. The single ignored test entry is the HTTP

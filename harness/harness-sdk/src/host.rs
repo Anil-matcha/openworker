@@ -574,6 +574,15 @@ impl Host {
                     json!({"session_id":s.id,"submission_id":key,"text":text}),
                 )
                 .await?;
+            } else if let Some((key, text)) = openworker_runtime::assistant_tools::due(
+                &s,
+                openworker_runtime::assistant_tools::now(),
+            ) {
+                rt.dispatch(
+                    "turn/start",
+                    json!({"session_id":s.id,"submission_id":key,"text":text}),
+                )
+                .await?;
             }
         }
         Ok(())
@@ -682,6 +691,8 @@ impl Host {
                 c.insert("dynamic_agents".into(), json!(true));
                 c.insert("session_model_override".into(), json!(true));
                 c.insert("sdk_question_policy".into(), json!(true));
+                c.insert("memory_tools".into(), json!(true));
+                c.insert("scheduled_tasks".into(), json!(true));
                 c.insert("coding_tools".into(), json!(true));
                 c.insert("coding_processes".into(), json!(cfg!(target_os = "linux")));
                 c.insert("model_providers".into(), json!(true));

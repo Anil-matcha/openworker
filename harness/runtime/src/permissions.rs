@@ -73,15 +73,25 @@ pub fn native_tool<'a>(bundle: &'a Bundle, alias: &str) -> Option<&'a str> {
 }
 
 pub fn classify(bundle: &Bundle, alias: &str) -> Category {
+    if crate::assistant_tools::internal(alias) {
+        return if crate::assistant_tools::read_only(alias) {
+            Category::Read
+        } else if matches!(alias, "schedule_create" | "schedule_update") {
+            Category::Execute
+        } else {
+            Category::WriteLocal
+        };
+    }
     if alias == "read_history" || crate::skills::internal(alias) {
         return Category::Read;
     }
     match native_tool(bundle, alias) {
         Some(
             "read_file" | "example_echo" | "list_files" | "search_files" | "process_status"
-            | "process_logs",
+            | "process_logs" | "git_status" | "git_diff" | "git_log",
         ) => Category::Read,
-        Some("write_file" | "edit_file") => Category::WriteLocal,
+        Some("write_file" | "edit_file" | "apply_patch") => Category::WriteLocal,
+        Some("web_fetch") => Category::Egress,
         Some("run_shell" | "process_start" | "process_stop") => Category::Execute,
         _ => Category::External,
     }

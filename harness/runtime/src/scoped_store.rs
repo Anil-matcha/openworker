@@ -6,6 +6,19 @@ pub struct ScopedStore {
     pub coworker: String,
 }
 impl StateStore for ScopedStore {
+    fn assistant_call(
+        &mut self,
+        sid: &str,
+        tid: &str,
+        call: &Value,
+        args: &Value,
+    ) -> Result<Event> {
+        self.metadata(sid)?;
+        self.inner
+            .lock()
+            .unwrap()
+            .assistant_call(sid, tid, call, args)
+    }
     fn agent_run(&self, sid: &str, submission: Option<&str>) -> Result<Option<Value>> {
         self.metadata(sid)?;
         self.inner.lock().unwrap().agent_run(sid, submission)
