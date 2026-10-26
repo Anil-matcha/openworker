@@ -11,9 +11,11 @@ import gemini from "./logos/gemini.svg";
 import byteplus from "./logos/byteplus.svg";
 import volcengine from "./logos/volcengine.svg";
 import ollama from "./logos/ollama.svg";
-// llama.cpp: selfhst/icons (CC BY 4.0); vLLM: homarr-labs/dashboard-icons (Apache 2.0).
+// llama.cpp: selfhst/icons (CC BY 4.0); vLLM: homarr-labs/dashboard-icons (Apache 2.0);
+// LM Studio: lobe-icons (MIT).
 import llamacpp from "./logos/llamacpp.svg";
 import vllm from "./logos/vllm.svg";
+import lmstudio from "./logos/lmstudio.svg";
 import bedrock from "./logos/bedrock.svg";
 import vertex from "./logos/vertex.svg";
 import openrouter from "./logos/openrouter.svg";
@@ -49,6 +51,7 @@ export const PROVIDER_LOGOS: Record<string, string> = {
   ollama,
   llamacpp,
   vllm,
+  lmstudio,
   bedrock,
   vertex,
   openrouter,
@@ -83,6 +86,7 @@ export const PROVIDER_ORDER = [
   "ollama",
   "llamacpp",
   "vllm",
+  "lmstudio",
   "bedrock",
   "vertex",
   "openrouter",

@@ -1601,7 +1601,9 @@
     "llamacpp_desc": "无需 API 密钥，除非你的 llama-server 启动时设置了密钥。",
     "install_llamacpp": "安装 llama.cpp",
     "vllm_desc": "vLLM 运行在带 NVIDIA GPU 的 Linux 上。仅当服务器启动时设置了密钥才需要填写。",
-    "install_vllm": "安装 vLLM"
+    "install_vllm": "安装 vLLM",
+    "lmstudio_desc": "LM Studio 应用会提供你在其中下载的模型。仅当你在应用中开启了密钥才需要填写。",
+    "install_lmstudio": "安装 LM Studio"
   },
   "workspace_trust": {
     "title": "信任此工作区的命令？",

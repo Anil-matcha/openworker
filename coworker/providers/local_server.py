@@ -1,6 +1,6 @@
-"""llama.cpp and vLLM: servers the user starts, reached through their OpenAI-compatible
-`/v1`. One module for both, since OpenWorker treats them the same way and the two
-differ only in what they report about themselves.
+"""llama.cpp, vLLM and LM Studio: servers the user starts, reached through their
+OpenAI-compatible `/v1`. One module for all three, since OpenWorker treats them the same
+way and they differ only in what they report about themselves.
 
 - llama.cpp `llama-server`: `localhost:8080` by default; `/v1/models` lists the loaded
   model (its id is the file path unless the server was started with `--alias`), with
@@ -11,8 +11,12 @@ differ only in what they report about themselves.
   `max_model_len`. Tool calls work only when the server was started with
   `--enable-auto-tool-choice --tool-call-parser <name>`; the harness cannot turn them on,
   but it can find out, and say so, before a session breaks.
+- LM Studio: `localhost:1234` by default (`lms server start` or the Developer tab); its
+  `/v1/models` lists every downloaded model, and its own `/api/v0/models` adds each one's
+  `max_context_length` and whether it is loaded. Tool calls go through the model's chat
+  template, as in llama.cpp.
 
-Neither tells the harness what the machine is; that is local_machine.py. Both may take an
+None of them tells the harness what the machine is; that is local_machine.py. Both may take an
 API key; without one any value is accepted, and OpenWorker sends a placeholder.
 """
 
@@ -31,6 +35,7 @@ from .recommended import recommendation_for
 LOCAL_SERVERS: dict[str, dict[str, str]] = {
     "llamacpp": {"title": "llama.cpp", "default_base": "http://localhost:8080"},
     "vllm": {"title": "vLLM", "default_base": "http://localhost:8000"},
+    "lmstudio": {"title": "LM Studio", "default_base": "http://localhost:1234"},
 }
 PLACEHOLDER_KEY = "none"
 CACHE_SECONDS = 60.0
@@ -122,6 +127,8 @@ def _fetch(name: str, base: str, api_key: Optional[str]) -> list[dict[str, Any]]
     if not isinstance(items, list):
         return []
     props: dict[str, Any] = {}
+    if name == "lmstudio":
+        props = _lmstudio_catalog(base, headers)
     if name == "llamacpp":
         try:
             got = httpx.get(base[: -len("/v1")] + "/props", headers=headers, timeout=4.0).json()
@@ -140,6 +147,20 @@ def _fetch(name: str, base: str, api_key: Optional[str]) -> list[dict[str, Any]]
             continue
         rows.append(_row(name, item, props, tools))
     return rows
+
+
+def _lmstudio_catalog(base: str, headers: dict[str, str]) -> dict[str, Any]:
+    """LM Studio's own listing (`/api/v0/models`), keyed by id: the trained window
+    (`max_context_length`) and the load state the OpenAI-compatible listing leaves out.
+    Empty when the server does not answer it."""
+    try:
+        got = httpx.get(base[: -len("/v1")] + "/api/v0/models", headers=headers, timeout=4.0).json()
+    except (httpx.HTTPError, ValueError, OSError):
+        return {}
+    items = got.get("data") if isinstance(got, dict) else None
+    if not isinstance(items, list):
+        return {}
+    return {str(it["id"]): it for it in items if isinstance(it, dict) and it.get("id")}
 
 
 def _vllm_tools_on(base: str, headers: dict[str, str], model: str) -> Optional[bool]:
@@ -171,6 +192,13 @@ def _row(name: str, item: dict[str, Any], props: dict[str, Any], tools: Optional
         context = _int((props.get("default_generation_settings") or {}).get("n_ctx"))
         context_max = _int(meta.get("n_ctx_train"))
         size = _int(meta.get("size"))
+    elif name == "lmstudio":
+        # LM Studio sizes the window when it loads the model (JIT, on first request, by
+        # default); until then the trained window is the only figure it reports.
+        own = props.get(served_id) if isinstance(props.get(served_id), dict) else {}
+        context_max = _int(own.get("max_context_length"))
+        context = _int(own.get("loaded_context_length")) or context_max
+        size = None
     else:
         context = _int(item.get("max_model_len"))
         context_max = context
@@ -205,8 +233,8 @@ def _int(value: Any) -> Optional[int]:
 
 
 def thinking_as_template_kwargs(settings: dict[str, Any]) -> dict[str, Any]:
-    """The thinking switch travels as Ollama's `think` field (model_config.py); llama.cpp
-    and vLLM read it from the chat template's `enable_thinking` instead. Rewrites one into
+    """The thinking switch travels as Ollama's `think` field (model_config.py); llama.cpp,
+    vLLM and LM Studio read it from the chat template's `enable_thinking` instead. Rewrites one into
     the other and leaves everything else alone."""
     extra = settings.get("extra_body")
     if not isinstance(extra, dict) or "think" not in extra:
