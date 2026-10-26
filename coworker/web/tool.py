@@ -58,6 +58,7 @@ PROVIDER_HOSTS = {
     "tavily": "api.tavily.com",
     "brave": "api.search.brave.com",
     "serper": "google.serper.dev",
+    "exa": "api.exa.ai",
 }
 
 

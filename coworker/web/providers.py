@@ -1,8 +1,8 @@
 """Web search providers — a keyless default + pluggable third-party services.
 
-`duckduckgo` works with no API key (our "starting version of our own"). `tavily`, `brave` and
-`serper` give better results but need a key (configured via the SecretStore / env). All
-providers return a uniform `list[SearchResult]`; the heavy client libs are lazy-imported.
+`duckduckgo` works with no API key (our "starting version of our own"). `tavily`, `brave`,
+`serper` and `exa` give better results but need a key (configured via the SecretStore / env).
+All providers return a uniform `list[SearchResult]`; the heavy client libs are lazy-imported.
 """
 
 from __future__ import annotations
@@ -156,11 +156,51 @@ class SerperProvider(WebSearchProvider):
         ]
 
 
+class ExaProvider(WebSearchProvider):
+    name = "exa"
+    display_name = "Exa"
+    key_url = "https://exa.ai"
+    requires_key = True
+
+    def __init__(self, api_key: str) -> None:
+        self.api_key = api_key
+
+    def search(self, query: str, max_results: int = 5) -> list[SearchResult]:
+        import httpx
+
+        resp = httpx.post(
+            "https://api.exa.ai/search",
+            headers={
+                "x-api-key": self.api_key,
+                "Content-Type": "application/json",
+                "x-exa-integration": "andrewyng/openworker-integration",
+            },
+            json={
+                "query": query,
+                "type": "auto",
+                "numResults": max_results,
+                "contents": {"highlights": True},
+            },
+            timeout=_TIMEOUT,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        return [
+            SearchResult(
+                title=r.get("title") or "",
+                url=r.get("url") or "",
+                snippet=" ".join(r.get("highlights") or []),
+            )
+            for r in data.get("results", [])
+        ]
+
+
 _PROVIDERS = {
     "duckduckgo": DuckDuckGoProvider,
     "tavily": TavilyProvider,
     "brave": BraveProvider,
     "serper": SerperProvider,
+    "exa": ExaProvider,
 }
 
 
