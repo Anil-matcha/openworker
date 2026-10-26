@@ -1,7 +1,7 @@
 """Tests for web search — provider abstraction, the tool, and config resolution.
 
 No network: a FakeProvider is injected; third-party key handling and the REST config path
-are exercised without hitting DuckDuckGo/Tavily/Brave/Serper/Exa.
+are exercised without hitting DuckDuckGo/Tavily/Brave/Serper/Exa/Firecrawl.
 """
 
 from __future__ import annotations
@@ -21,6 +21,7 @@ from coworker.web.providers import (
     BraveProvider,
     DuckDuckGoProvider,
     ExaProvider,
+    FirecrawlProvider,
     SerperProvider,
     TavilyProvider,
     WebSearchProvider,
@@ -91,6 +92,9 @@ def test_build_provider_third_party_requires_key():
     with pytest.raises(ValueError):
         build_provider("exa")  # no key
     assert isinstance(build_provider("exa", "exa-x"), ExaProvider)
+    with pytest.raises(ValueError):
+        build_provider("firecrawl")  # no key
+    assert isinstance(build_provider("firecrawl", "fc-x"), FirecrawlProvider)
 
 
 def test_serper_sends_correct_request_and_maps_organic_results(monkeypatch):
@@ -174,6 +178,42 @@ def test_exa_provider_parses_highlights(monkeypatch):
     ]
 
 
+def test_firecrawl_maps_v2_search_response(monkeypatch):
+    import httpx
+
+    captured = {}
+
+    class _Resp:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {
+                "success": True,
+                "data": {
+                    "web": [
+                        {"title": "t0", "url": "https://x/0", "description": "d0"},
+                        {"title": "t1", "url": "https://x/1", "description": "d1"},
+                    ]
+                },
+            }
+
+    def fake_post(url, headers=None, json=None, timeout=None):
+        captured.update(url=url, headers=headers, json=json)
+        return _Resp()
+
+    monkeypatch.setattr(httpx, "post", fake_post)
+    results = FirecrawlProvider("fc-key").search("claude api", max_results=2)
+
+    assert captured["url"] == "https://api.firecrawl.dev/v2/search"
+    assert captured["headers"]["Authorization"] == "Bearer fc-key"
+    assert captured["json"] == {"query": "claude api", "limit": 2}
+    assert [(r.title, r.url, r.snippet) for r in results] == [
+        ("t0", "https://x/0", "d0"),
+        ("t1", "https://x/1", "d1"),
+    ]
+
+
 def test_keyed_providers_raise_on_http_errors(monkeypatch):
     """A 401/429/5xx surfaces as an error instead of an empty result list."""
     import httpx
@@ -183,7 +223,13 @@ def test_keyed_providers_raise_on_http_errors(monkeypatch):
 
     monkeypatch.setattr(httpx, "post", denied)
     monkeypatch.setattr(httpx, "get", denied)
-    for provider in (TavilyProvider("k"), BraveProvider("k"), SerperProvider("k"), ExaProvider("k")):
+    for provider in (
+        TavilyProvider("k"),
+        BraveProvider("k"),
+        SerperProvider("k"),
+        ExaProvider("k"),
+        FirecrawlProvider("k"),
+    ):
         with pytest.raises(httpx.HTTPStatusError):
             provider.search("q")
 
