@@ -2874,6 +2874,7 @@
     "none_fit": "None of the suggested models fits this Mac's memory.",
     "from_ollama": "From Ollama · nothing to download",
     "downloaded": "Downloaded",
+    "license": "Licence: {{name}}",
     "choose_file": "Choose a GGUF file…",
     "choose_file_sub": "A model file you downloaded yourself",
     "change": "Change",
@@ -2886,6 +2887,9 @@
     "start": "Start",
     "download_starting": "Starting the download…",
     "downloading": "Downloading · {{done}} of {{total}}",
+    "verifying": "Verifying the download…",
+    "rate_limited": "Hugging Face is rate-limiting downloads, retrying in {{seconds}}s",
+    "note_unverified": "Hugging Face's API couldn't be reached, so this download's checksum was not checked.",
     "minutes_left_one": "about {{count}} min left",
     "minutes_left_other": "about {{count}} min left",
     "check_download": "Download the model",
@@ -2905,8 +2909,7 @@
     "own_server": "Already run llama-server yourself?",
     "connect_instead": "Connect to it instead",
     "setup_here": "Set up llama.cpp on this Mac instead"
-  }
-,
+  },
   "customization": {
     "title": "Customization",
     "lead": "Pick the services OpenWorker uses behind its tools. Each choice applies to new sessions on this machine.",

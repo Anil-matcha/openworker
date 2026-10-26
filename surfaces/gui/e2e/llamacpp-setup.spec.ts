@@ -20,12 +20,14 @@ function base(over: Record<string, unknown> = {}) {
     supported: true, brew: "/opt/homebrew/bin/brew", installed: null, install_command: "brew install llama.cpp",
     cache_dir: "~/.cache/huggingface/hub", cache_free_bytes: 56 * GB,
     suggested: [
-      { id: "nemotron-3.5-lightning", name: "Nemotron 3.5 Lightning", vendor: "NVIDIA", quant: "Q8 + MTP", features: ["thinking", "tools"], size: 36e9, fit: "runs_well", downloaded: false },
-      { id: "gpt-oss-20b", name: "gpt-oss 20B", vendor: "OpenAI", quant: "MXFP4", features: ["reasoning", "tools"], size: 12e9, fit: "runs_well", downloaded: false },
+      { id: "nemotron-3.5-lightning", name: "Nemotron 3.5 Lightning", vendor: "NVIDIA", quant: "Q8 + MTP", features: ["thinking", "tools"], size: 36e9, fit: "runs_well", downloaded: false,
+        license: "OpenMDW-1.1", license_url: "https://openmdw.ai/license/1-1/" },
+      { id: "gpt-oss-20b", name: "gpt-oss 20B", vendor: "OpenAI", quant: "MXFP4", features: ["reasoning", "tools"], size: 12e9, fit: "runs_well", downloaded: false,
+        license: "Apache-2.0", license_url: "https://huggingface.co/openai/gpt-oss-20b/blob/main/LICENSE" },
     ],
     ollama: [{ name: "qwen3-coder:30b", path: "/Users/me/.ollama/models/blobs/sha256-1194", size: 18e9, fit: "runs_well" }],
     ollama_pull: [{ name: "gpt-oss:20b", size: 12e9, fit: "runs_well", command: "ollama pull gpt-oss:20b" }],
-    phase: "idle", lines: [], progress: null, model: null, error: null, check: null, address: null,
+    phase: "idle", lines: [], progress: null, model: null, error: null, check: null, note: null, retry_in: null, address: null,
     autostart: false, last_choice: null,
     ...over,
   };
@@ -90,6 +92,9 @@ test("llama.cpp: install, pick a model Ollama has, start it, and it runs", async
   await expect(pick).toContainText("Nemotron 3.5 Lightning");
   await expect(page.getByTestId("llamacpp-pull")).toContainText("ollama pull gpt-oss:20b");
   await expect(page.getByTestId("llamacpp-cache")).toContainText("~/.cache/huggingface/hub");
+  // Each model that downloads names its licence, linked, before Download.
+  await expect(page.getByTestId("llamacpp-license-nemotron-3.5-lightning")).toContainText("Licence: OpenMDW-1.1");
+  await expect(page.getByTestId("llamacpp-license-gpt-oss-20b")).toContainText("Licence: Apache-2.0");
   await expect(page.getByTestId("llamacpp-start")).toHaveText("Download and start");
   await page.getByTestId("llamacpp-model-o:qwen3-coder:30b").click();
   await expect(page.getByTestId("llamacpp-start")).toHaveText("Start");
@@ -142,3 +147,84 @@ test("llama.cpp: Connect to it instead shows the address form, and back", async 
   await page.getByTestId("llamacpp-setup-here").click();
   await expect(page.getByTestId("llamacpp-setup")).toBeVisible();
 });
+
+const INSTALLED = { installed: { path: "/opt/homebrew/bin/llama-server", version: "0.6.0" } };
+const DOWNLOADING = {
+  ...INSTALLED,
+  phase: "downloading",
+  model: { name: "Nemotron 3.5 Lightning", detail: "Q8 + MTP", alias: "nemotron-3.5-lightning", download: true },
+  progress: { done: 12.4e9, total: 35.8e9, seconds_left: 840 },
+};
+
+test("llama.cpp: a download waits out a rate limit, verifies the file, and says when it could not", async ({ page }) => {
+  // Each poll moves the download along: rate-limited, then verifying with the API gone.
+  const states = [
+    base({ ...DOWNLOADING, retry_in: 42 }),
+    base({ ...DOWNLOADING, retry_in: 42 }),
+    base({ ...DOWNLOADING, progress: { done: 35.8e9, total: 35.8e9, seconds_left: 0, verifying: true }, note: "unverified" }),
+  ];
+  let poll = 0;
+  await page.route("**/v1/providers", (route) => route.fulfill({ json: [provider({ phase: "downloading", model: "Nemotron 3.5 Lightning" })] }));
+  await page.route("**/v1/providers/llamacpp/models", (route) => route.fulfill({ json: { provider: "llamacpp", alive: false, models: [] } }));
+  await page.route("**/v1/llamacpp/**", (route) => route.fulfill({ json: states[Math.min(poll++, states.length - 1)] }));
+  await openPage(page);
+  await expect(page.getByTestId("set-provider-llamacpp")).toContainText("Starting…");
+  await page.getByTestId("set-provider-llamacpp").click();
+  await expect(page.getByTestId("llamacpp-step-start")).toHaveAttribute("data-state", "now");
+  const progress = page.getByTestId("llamacpp-progress");
+  await expect(progress).toHaveText("Hugging Face is rate-limiting downloads, retrying in 42s");
+  await expect(progress).toHaveText("Verifying the download…");
+  await expect(page.getByTestId("llamacpp-note")).toContainText("checksum was not checked");
+  await expect(page.getByTestId("llamacpp-cancel")).toBeVisible();
+});
+
+// The screenshots in docs/assets (light and dark): the three-step card before anything is
+// installed, the model picker, and the running card.
+for (const theme of ["light", "dark"] as const) {
+  test(`llama.cpp: screenshots (${theme})`, async ({ page }) => {
+    let state = base();
+    await page.addInitScript((value) => localStorage.setItem("openwork-theme", value), theme);
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.route("**/v1/providers", (route) =>
+      route.fulfill({ json: [provider({ phase: state.phase, model: (state.model as { name: string } | null)?.name ?? null })] }),
+    );
+    await page.route("**/v1/providers/llamacpp/models", (route) =>
+      route.fulfill({
+        json: {
+          provider: "llamacpp", alive: state.phase === "running",
+          models: state.phase === "running"
+            ? [{ model: "llamacpp:qwen3-coder:30b", name: "qwen3-coder:30b", size_bytes: 18e9, tools: true, thinking: false, vision: null, remote: false,
+                parameter_size: null, quantization: null, context_max: 262144, context: 131072, context_from: "server", fit: "runs_well", recommendation: null }]
+            : [],
+        },
+      }),
+    );
+    await page.route("**/v1/llamacpp/**", (route) => route.fulfill({ json: state }));
+    // "Your system", as a 96 GB Mac reports it.
+    await page.route("**/v1/system", (route) =>
+      route.fulfill({
+        json: { processor: "Apple M4 Max", graphics: "Apple M4 Max (40-core GPU)", kind: "apple_silicon", memory_bytes: 96 * GB, gpu_memory_bytes: null,
+          storage_free_bytes: 420 * GB, storage_total_bytes: 926 * GB, model_memory_bytes: 72 * GB, runs_well_up_to_bytes: 64 * GB },
+      }),
+    );
+    const suffix = theme === "dark" ? "-dark" : "";
+
+    await openPage(page);
+    await page.getByTestId("set-provider-llamacpp").click();
+    await expect(page.getByTestId("llamacpp-step-get")).toHaveAttribute("data-state", "now");
+    await page.screenshot({ path: `test-results/models-llamacpp-setup${suffix}.png` });
+
+    state = base(INSTALLED);
+    await page.getByTestId("set-back").click();
+    await page.getByTestId("set-provider-llamacpp").click();
+    await expect(page.getByTestId("llamacpp-step-pick")).toHaveAttribute("data-state", "now");
+    await expect(page.getByTestId("llamacpp-license-nemotron-3.5-lightning")).toBeVisible();
+    await page.screenshot({ path: `test-results/models-llamacpp-pick${suffix}.png` });
+
+    state = base({ ...INSTALLED, ...RUNNING });
+    await page.getByTestId("set-back").click();
+    await page.getByTestId("set-provider-llamacpp").click();
+    await expect(page.getByTestId("llamacpp-running")).toContainText("qwen3-coder:30b");
+    await page.screenshot({ path: `test-results/models-llamacpp-running${suffix}.png` });
+  });
+}

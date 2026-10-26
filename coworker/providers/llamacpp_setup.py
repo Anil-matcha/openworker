@@ -22,7 +22,9 @@ The GUI polls `state()` while something runs, like the sandbox setup (setup_job.
 
 from __future__ import annotations
 
+import datetime
 import functools
+import hashlib
 import json
 import os
 import re
@@ -34,6 +36,7 @@ import sys
 import threading
 import time
 from collections import deque
+from email.utils import parsedate_to_datetime
 from pathlib import Path
 from typing import Any, Callable, Optional
 
@@ -48,6 +51,11 @@ DEFAULT_PORT = 8080
 LOAD_TIMEOUT_S = 900.0
 CHECK_TIMEOUT_S = 180.0
 INSTALL_LINES = 6
+# Hugging Face answers 429 with how long to wait (per-IP windows of five minutes). Wait
+# that long, within reason, a few times; then give up with the error.
+RATE_LIMIT_RETRIES = 6
+RATE_LIMIT_WAIT_MAX_S = 120
+RATE_LIMIT_WAIT_DEFAULT_S = 5
 
 # Where Homebrew puts programs on Apple silicon and on Intel Macs; the desktop app's PATH
 # often has neither.
@@ -119,6 +127,10 @@ def _free_bytes(path: Path) -> Optional[int]:
         return shutil.disk_usage(p).free
     except OSError:
         return None
+
+
+class _Cancelled(Exception):
+    pass
 
 
 # -- the models it offers --------------------------------------------------------------------
@@ -221,6 +233,8 @@ def overview() -> dict[str, Any]:
                 "size": m.get("size"),
                 "fit": fit,
                 "downloaded": _downloaded(m),
+                "license": m.get("license"),
+                "license_url": m.get("license_url"),
             }
         )
         if m.get("ollama") and m["ollama"] not in have_ollama:
@@ -248,18 +262,90 @@ def overview() -> dict[str, Any]:
 # -- downloads into llama.cpp's cache --------------------------------------------------------
 
 
-def _hf_files(repo: str) -> tuple[str, dict[str, dict[str, Any]]]:
-    """(commit, {path: {size, oid}}) for a repo's main branch."""
-    rev = httpx.get(f"{HF}/api/models/{repo}/revision/main", timeout=30, follow_redirects=True)
+def _retry_after(resp: httpx.Response) -> int:
+    """Seconds to wait after a 429, from `Retry-After` (seconds or a date), `RateLimit-Reset`,
+    or Hugging Face's `RateLimit: "resolvers";r=0;t=52` — bounded, at least one second."""
+    h = resp.headers
+    wait: Optional[float] = None
+    raw = h.get("retry-after")
+    if raw:
+        try:
+            wait = float(raw)
+        except ValueError:
+            try:
+                wait = (parsedate_to_datetime(raw) - datetime.datetime.now(datetime.timezone.utc)).total_seconds()
+            except (TypeError, ValueError):
+                wait = None
+    if wait is None and h.get("ratelimit-reset"):
+        try:
+            wait = float(h["ratelimit-reset"])
+        except ValueError:
+            wait = None
+    if wait is None and h.get("ratelimit"):
+        m = re.search(r"\bt=(\d+)", h["ratelimit"])
+        wait = float(m.group(1)) if m else None
+    if wait is None:
+        wait = RATE_LIMIT_WAIT_DEFAULT_S
+    return int(min(max(wait, 1), RATE_LIMIT_WAIT_MAX_S))
+
+
+def _hf_request(method: str, url: str, *, on_wait: Optional[Callable[[int], None]] = None, **kw: Any) -> httpx.Response:
+    """One Hugging Face request; on 429 it waits as told and tries again, a few times."""
+    kw.setdefault("timeout", 30)
+    for attempt in range(RATE_LIMIT_RETRIES + 1):
+        resp = httpx.request(method, url, **kw)
+        if resp.status_code != 429 or attempt == RATE_LIMIT_RETRIES:
+            return resp
+        wait = _retry_after(resp)
+        if on_wait:
+            on_wait(wait)
+        else:
+            time.sleep(wait)
+    return resp  # pragma: no cover - the loop returns
+
+
+def _hf_files(repo: str, on_wait: Optional[Callable[[int], None]] = None) -> tuple[str, dict[str, dict[str, Any]]]:
+    """(commit, {path: {size, oid, sha256}}) for a repo's main branch. `sha256` is the LFS
+    object id, the checksum the download is verified against; None for a non-LFS file."""
+    rev = _hf_request("GET", f"{HF}/api/models/{repo}/revision/main", on_wait=on_wait, follow_redirects=True)
     rev.raise_for_status()
     commit = rev.json()["sha"]
-    tree = httpx.get(f"{HF}/api/models/{repo}/tree/{commit}", timeout=30, follow_redirects=True)
+    tree = _hf_request("GET", f"{HF}/api/models/{repo}/tree/{commit}", on_wait=on_wait, follow_redirects=True)
     tree.raise_for_status()
     files = {}
     for f in tree.json():
         lfs = f.get("lfs") or {}
-        files[f["path"]] = {"size": int(lfs.get("size") or f.get("size") or 0), "oid": lfs.get("oid") or f.get("oid")}
+        oid = lfs.get("oid") or f.get("oid")
+        files[f["path"]] = {"size": int(lfs.get("size") or f.get("size") or 0), "oid": oid, "sha256": lfs.get("oid")}
     return commit, files
+
+
+def _hf_resolve_info(repo: str, filename: str, on_wait: Optional[Callable[[int], None]] = None) -> tuple[str, dict[str, Any]]:
+    """What the file's own download address says about it, for when the API is not
+    answering: the 302 to the CDN carries the commit, the size and the ETag. The ETag names
+    the blob as huggingface_hub does; it is not trusted as a checksum."""
+    resp = _hf_request("HEAD", f"{HF}/{repo}/resolve/main/{filename}", on_wait=on_wait, follow_redirects=False)
+    if resp.status_code not in (200, 302, 307):
+        raise RuntimeError(f"download failed: HTTP {resp.status_code}")
+    h = resp.headers
+    etag = (h.get("x-linked-etag") or h.get("etag") or "").strip().removeprefix("W/").strip('"')
+    size = int(h.get("x-linked-size") or h.get("content-length") or 0)
+    if not etag or not size:
+        raise RuntimeError(f"download failed: no size for {filename}")
+    return h.get("x-repo-commit") or "main", {"size": size, "oid": etag, "sha256": None}
+
+
+def _sha256(path: Path, cancel: Optional[threading.Event] = None) -> str:
+    h = hashlib.sha256()
+    with open(path, "rb") as fh:
+        while True:
+            if cancel is not None and cancel.is_set():
+                raise _Cancelled()
+            chunk = fh.read(8 << 20)
+            if not chunk:
+                break
+            h.update(chunk)
+    return h.hexdigest()
 
 
 def _place(repo: str, commit: str, filename: str, blob: Path) -> Path:
@@ -359,10 +445,6 @@ def _end(proc: subprocess.Popen) -> None:
         proc.wait(5)
 
 
-class _Cancelled(Exception):
-    pass
-
-
 class LlamaCppRunner:
     """Installs llama.cpp and runs one llama-server. `phase` is one of idle, installing,
     downloading, loading, checking, running, failed. One thing at a time."""
@@ -380,6 +462,10 @@ class LlamaCppRunner:
         self.error: Optional[str] = None
         self.check: Optional[dict[str, bool]] = None
         self.port: Optional[int] = None
+        # "unverified" when a download could not be checked against its checksum.
+        self.note: Optional[str] = None
+        # Seconds until the next try while Hugging Face rate-limits us.
+        self.retry_in: Optional[int] = None
         # Set by the manager: point the provider at the server and tick its model.
         self.on_running: Optional[Callable[[str, str], None]] = None
 
@@ -398,6 +484,8 @@ class LlamaCppRunner:
                 "model": dict(self.model) if self.model else None,
                 "error": self.error,
                 "check": dict(self.check) if self.check else None,
+                "note": self.note,
+                "retry_in": self.retry_in,
                 "address": f"127.0.0.1:{self.port}" if self.port and self.phase == "running" else None,
                 "autostart": bool(settings.get("autostart")),
                 "last_choice": settings.get("choice"),
@@ -543,8 +631,20 @@ class LlamaCppRunner:
         have = {f: _cached_file(entry["repo"], f) for f in wanted}
         if all(have.values()):
             return {"file": str(have[entry["file"]]), "draft": str(have[entry["draft"]]) if entry.get("draft") else None}
-        commit, files = _hf_files(entry["repo"])
         missing = [f for f in wanted if not have[f]]
+        try:
+            # Once, at the start: the commit, each file's size and its sha256 (the LFS id).
+            commit, files = _hf_files(entry["repo"], self._rate_wait)
+        except (httpx.HTTPError, KeyError, ValueError):
+            # The API is not answering (down, or its own rate limit); the files come from
+            # another address with its own limit, so download anyway, unverified.
+            commit, files = "", {}
+            for f in missing:
+                c, info = _hf_resolve_info(entry["repo"], f, self._rate_wait)
+                commit = commit or c
+                files[f] = info
+            with self._lock:
+                self.note = "unverified"
         for f in missing:
             if f not in files:
                 raise RuntimeError(f"{f} is no longer in {entry['repo']}")
@@ -561,33 +661,69 @@ class LlamaCppRunner:
             part = blob.with_name(blob.name + ".incomplete")
             size = files[f]["size"]
             if not (blob.is_file() and blob.stat().st_size == size):
-                have_bytes = part.stat().st_size if part.is_file() else 0
-                headers = {"Range": f"bytes={have_bytes}-"} if have_bytes else {}
                 url = f"{HF}/{entry['repo']}/resolve/{commit}/{f}"
-                with httpx.stream("GET", url, headers=headers, follow_redirects=True, timeout=60) as resp:
-                    if resp.status_code == 200:
-                        have_bytes = 0
-                    elif resp.status_code != 206:
-                        raise RuntimeError(f"download failed: HTTP {resp.status_code}")
-                    with open(part, "ab" if have_bytes else "wb") as out:
-                        got = have_bytes
-                        last = 0.0
-                        for chunk in resp.iter_bytes(1 << 20):
-                            if self._cancel.is_set():
-                                raise _Cancelled()
-                            out.write(chunk)
-                            got += len(chunk)
-                            now = time.monotonic()
-                            if now - last > 0.5:
-                                last = now
-                                self._set_progress(done_before + got, total, started)
+                for attempt in range(RATE_LIMIT_RETRIES + 1):
+                    wait = self._fetch(url, part, size, done_before, total, started)
+                    if wait is None:
+                        break
+                    if attempt == RATE_LIMIT_RETRIES:
+                        raise RuntimeError("download failed: HTTP 429 (Hugging Face is rate-limiting downloads)")
+                    self._rate_wait(wait)
                 if part.stat().st_size != size:
                     raise RuntimeError("download incomplete; start again to resume")
+                if files[f].get("sha256"):
+                    with self._lock:
+                        self.progress = {**(self.progress or {}), "done": done_before + size, "total": total, "verifying": True}
+                    if _sha256(part, self._cancel) != files[f]["sha256"]:
+                        part.unlink(missing_ok=True)
+                        raise RuntimeError(f"{f} did not match its checksum and was removed; start again to download it afresh")
                 part.rename(blob)
             done_before += size
             self._set_progress(done_before, total, started)
             have[f] = _place(entry["repo"], commit, f, blob)
         return {"file": str(have[entry["file"]]), "draft": str(have[entry["draft"]]) if entry.get("draft") else None}
+
+    def _fetch(self, url: str, part: Path, size: int, done_before: int, total: int, started: float) -> Optional[int]:
+        """Download `url` into `part`, resuming what is there. None when done; on a 429,
+        the seconds Hugging Face asks us to wait."""
+        have_bytes = part.stat().st_size if part.is_file() else 0
+        headers = {"Range": f"bytes={have_bytes}-"} if have_bytes else {}
+        with httpx.stream("GET", url, headers=headers, follow_redirects=True, timeout=60) as resp:
+            if resp.status_code == 429:
+                return _retry_after(resp)
+            if resp.status_code == 200:
+                have_bytes = 0
+            elif resp.status_code != 206:
+                raise RuntimeError(f"download failed: HTTP {resp.status_code}")
+            with open(part, "ab" if have_bytes else "wb") as out:
+                got = have_bytes
+                last = 0.0
+                for chunk in resp.iter_bytes(1 << 20):
+                    if self._cancel.is_set():
+                        raise _Cancelled()
+                    out.write(chunk)
+                    got += len(chunk)
+                    now = time.monotonic()
+                    if now - last > 0.5:
+                        last = now
+                        self._set_progress(done_before + got, total, started)
+        return None
+
+    def _rate_wait(self, seconds: int) -> None:
+        """Wait out a 429, a second at a time so the card can count down and Cancel works."""
+        end = time.monotonic() + seconds
+        while True:
+            left = int(end - time.monotonic() + 0.999)
+            if left <= 0:
+                break
+            with self._lock:
+                self.retry_in = left
+            if self._cancel.wait(min(1.0, left)):
+                with self._lock:
+                    self.retry_in = None
+                raise _Cancelled()
+        with self._lock:
+            self.retry_in = None
 
     def _set_progress(self, done: int, total: int, started: float) -> None:
         elapsed = max(time.monotonic() - started, 0.001)
@@ -715,6 +851,7 @@ class LlamaCppRunner:
                 return {"ok": False, "error": "busy"}
             self._cancel.clear()
             self.phase, self.error, self.progress = phase, None, None
+            self.note = self.retry_in = None
             self.lines.clear()
 
         def body() -> None:

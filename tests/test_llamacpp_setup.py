@@ -4,9 +4,11 @@ start, check, switch, stop and clean-up — against a stand-in llama-server."""
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import signal
+import threading
 import sys
 import textwrap
 import time
@@ -104,7 +106,7 @@ def test_download_lands_in_the_hugging_face_layout_and_resumes(tmp_path, monkeyp
     entry = {"id": "t", "name": "T", "repo": "org/t-GGUF", "file": "t.gguf", "draft": "mtp-t.gguf"}
     blobs = {"t.gguf": b"M" * 5000, "mtp-t.gguf": b"D" * 300}
     monkeypatch.setattr(
-        setup, "_hf_files", lambda repo: ("c0ffee", {f: {"size": len(b), "oid": f"oid-{f}"} for f, b in blobs.items()})
+        setup, "_hf_files", lambda repo, *a: ("c0ffee", {f: {"size": len(b), "oid": f"oid-{f}"} for f, b in blobs.items()})
     )
     # Half of the main file is already there from an interrupted run.
     part = setup._repo_dir("org/t-GGUF") / "blobs" / "oid-t.gguf.incomplete"
@@ -134,6 +136,137 @@ def test_download_lands_in_the_hugging_face_layout_and_resumes(tmp_path, monkeyp
     assert (setup._repo_dir("org/t-GGUF") / "refs" / "main").read_text() == "c0ffee"
     assert setup._downloaded(entry)
     assert setup.runner().progress["done"] == setup.runner().progress["total"] == 5300
+
+
+def test_the_catalog_names_each_model_licence_and_the_card_shows_it(monkeypatch):
+    for m in setup.catalog():
+        assert m["license"] and m["license_url"].startswith("https://"), m["id"]
+        assert m["license_source"].startswith("https://huggingface.co/"), m["id"]
+    monkeypatch.setattr(local_machine, "model_memory_bytes", lambda: 96 * GB)
+    monkeypatch.setattr(setup, "find_llama_server", lambda: None)
+    rows = {m["id"]: m for m in setup.overview()["suggested"]}
+    assert rows["nemotron-3.5-lightning"]["license"] == "OpenMDW-1.1"
+    assert rows["qwen3-coder-30b"]["license"] == "Apache-2.0" and rows["gpt-oss-20b"]["license"] == "Apache-2.0"
+    assert all(r["license_url"].startswith("https://") for r in rows.values())
+
+
+def test_retry_after_is_read_from_the_headers_and_bounded():
+    r = lambda **h: httpx.Response(429, headers=h)  # noqa: E731
+    assert setup._retry_after(r(**{"Retry-After": "7"})) == 7
+    assert setup._retry_after(r(**{"RateLimit-Reset": "12"})) == 12
+    # Hugging Face's own header: remaining and seconds to the window's end.
+    assert setup._retry_after(r(**{"RateLimit": '"resolvers";r=0;t=52'})) == 52
+    assert setup._retry_after(r(**{"Retry-After": "0"})) == 1
+    assert setup._retry_after(r(**{"Retry-After": "9000"})) == setup.RATE_LIMIT_WAIT_MAX_S
+    assert setup._retry_after(r()) == setup.RATE_LIMIT_WAIT_DEFAULT_S
+    from email.utils import format_datetime
+    import datetime as dt
+
+    soon = format_datetime(dt.datetime.now(dt.timezone.utc) + dt.timedelta(seconds=30), usegmt=True)
+    assert 27 <= setup._retry_after(r(**{"Retry-After": soon})) <= 30
+
+
+def _serve(monkeypatch, handler, *, api=True, files=True):
+    """Route the module's Hugging Face calls (API and file downloads) to `handler`."""
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    if api:
+        monkeypatch.setattr(httpx, "request", lambda method, url, **kw: client.request(method, url, headers=kw.get("headers")))
+    if files:
+        monkeypatch.setattr(httpx, "stream", lambda method, url, headers=None, **kw: client.stream(method, url, headers=headers))
+
+
+def test_download_verifies_the_checksum_and_removes_a_bad_file(tmp_path, monkeypatch):
+    good = b"G" * 4000
+    sha = hashlib.sha256(good).hexdigest()
+    entry = {"id": "t", "name": "T", "repo": "org/t-GGUF", "file": "t.gguf"}
+    monkeypatch.setattr(setup, "_hf_files", lambda repo, *a: ("c0ffee", {"t.gguf": {"size": 4000, "oid": sha, "sha256": sha}}))
+    body = {"ok": good, "bad": b"B" * 4000}
+    serving = ["ok"]
+    _serve(monkeypatch, lambda req: httpx.Response(200, content=body[serving[0]]), api=False)
+    r = setup.runner()
+    got = r._download(entry)
+    assert Path(got["file"]).read_bytes() == good
+    assert (setup._repo_dir("org/t-GGUF") / "blobs" / sha).is_file()
+    assert r.progress["done"] == r.progress["total"] == 4000 and r.state()["note"] is None
+
+    # The same size, different bytes: the file is refused and removed, nothing is placed.
+    serving[0] = "bad"
+    monkeypatch.setattr(setup, "_hf_files", lambda repo, *a: ("c0ffee", {"t.gguf": {"size": 4000, "oid": "x" * 64, "sha256": "x" * 64}}))
+    with pytest.raises(RuntimeError, match="checksum"):
+        setup.LlamaCppRunner()._download({**entry, "repo": "org/u-GGUF"})
+    blobs = setup._repo_dir("org/u-GGUF") / "blobs"
+    assert not list(blobs.iterdir()) and not (setup._repo_dir("org/u-GGUF") / "snapshots").exists()
+
+
+def test_without_the_api_the_download_is_unverified_and_says_so(tmp_path, monkeypatch):
+    data = b"Q" * 2500
+    entry = {"id": "t", "name": "T", "repo": "org/t-GGUF", "file": "t.gguf"}
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        if req.url.path.startswith("/api/"):
+            raise httpx.ConnectError("api down")
+        if req.method == "HEAD":
+            # What huggingface.co's 302 to the CDN says about the file.
+            return httpx.Response(302, headers={"Location": "https://cdn.example/x", "X-Repo-Commit": "abc123",
+                                                "X-Linked-Size": str(len(data)), "X-Linked-ETag": '"etag-t"'})
+        assert req.url.path == "/org/t-GGUF/resolve/abc123/t.gguf"
+        return httpx.Response(200, content=data)
+
+    _serve(monkeypatch, handler)
+    r = setup.runner()
+    got = r._download(entry)
+    assert Path(got["file"]) == setup._repo_dir("org/t-GGUF") / "snapshots" / "abc123" / "t.gguf"
+    assert Path(got["file"]).read_bytes() == data
+    assert (setup._repo_dir("org/t-GGUF") / "blobs" / "etag-t").is_file()
+    assert r.state()["note"] == "unverified"
+
+
+def test_a_429_is_waited_out_as_hugging_face_asks(tmp_path, monkeypatch):
+    data = b"R" * 1200
+    sha = hashlib.sha256(data).hexdigest()
+    entry = {"id": "t", "name": "T", "repo": "org/t-GGUF", "file": "t.gguf"}
+    limited = {"/api/models/org/t-GGUF/revision/main": 1, "/org/t-GGUF/resolve/c0ffee/t.gguf": 1}
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        path = req.url.path
+        if limited.get(path):
+            limited[path] -= 1
+            hdr = {"Retry-After": "1"} if path.startswith("/api/") else {"RateLimit": '"resolvers";r=0;t=1'}
+            return httpx.Response(429, headers=hdr)
+        if path.endswith("/revision/main"):
+            return httpx.Response(200, json={"sha": "c0ffee"})
+        if "/tree/" in path:
+            return httpx.Response(200, json=[{"path": "t.gguf", "size": len(data), "lfs": {"oid": sha, "size": len(data)}}])
+        return httpx.Response(200, content=data)
+
+    _serve(monkeypatch, handler)
+    r = setup.runner()
+    waits = []
+    real = r._rate_wait
+    monkeypatch.setattr(r, "_rate_wait", lambda s: (waits.append(s), real(s)))
+    got = r._download(entry)
+    assert waits == [1, 1]
+    assert Path(got["file"]).read_bytes() == data and r.state()["retry_in"] is None
+
+    # While it waits, the card can count down; Cancel ends the wait at once.
+    t = threading.Thread(target=lambda: pytest.raises(setup._Cancelled, real, 30))
+    t.start()
+    time.sleep(0.3)
+    assert r.state()["retry_in"] == 30
+    r.cancel()
+    t.join(5)
+    assert not t.is_alive() and r.state()["retry_in"] is None
+
+
+def test_too_many_429s_end_with_a_clear_error(tmp_path, monkeypatch):
+    entry = {"id": "t", "name": "T", "repo": "org/t-GGUF", "file": "t.gguf"}
+    monkeypatch.setattr(setup, "_hf_files", lambda repo, *a: ("c0ffee", {"t.gguf": {"size": 10, "oid": "o", "sha256": None}}))
+    _serve(monkeypatch, lambda req: httpx.Response(429, headers={"Retry-After": "1"}), api=False)
+    monkeypatch.setattr(setup, "RATE_LIMIT_RETRIES", 1)
+    r = setup.runner()
+    monkeypatch.setattr(r, "_rate_wait", lambda s: None)
+    with pytest.raises(RuntimeError, match="rate-limiting"):
+        r._download(entry)
 
 
 # -- the managed server, against a stand-in llama-server --------------------------------

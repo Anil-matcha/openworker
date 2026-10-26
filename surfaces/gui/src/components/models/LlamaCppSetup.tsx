@@ -231,6 +231,7 @@ function SetupCard({
             {t("llamacpp.no_tools")}
           </p>
         )}
+        {setup.note === "unverified" && <p className="text-meta text-faint mt-2.5" data-testid="llamacpp-note">{t("llamacpp.note_unverified")}</p>}
         <div className="grid grid-cols-[120px_1fr] gap-x-3 gap-y-1 text-ui mt-3">
           <span className="text-muted">{t("llamacpp.context")}</span>
           <span>{fmtContext(m.context)}</span>
@@ -320,6 +321,17 @@ function SetupCard({
                       size={s.size}
                       fit={s.fit}
                       extra={s.downloaded ? t("llamacpp.downloaded") : undefined}
+                      line={
+                        s.license ? (
+                          <button
+                            className="text-label text-faint underline decoration-line underline-offset-2 hover:text-ink"
+                            onClick={(e) => { e.stopPropagation(); if (s.license_url) openExternal(s.license_url); }}
+                            data-testid={`llamacpp-license-${s.id}`}
+                          >
+                            {t("llamacpp.license", { name: s.license })} ↗
+                          </button>
+                        ) : undefined
+                      }
                     />
                   ))}
                   {setup.suggested.length === 0 && <p className="px-3 py-2.5 text-meta text-faint">{t("llamacpp.none_fit")}</p>}
@@ -382,10 +394,14 @@ function SetupCard({
                 {phase === "downloading" && (
                   <>
                     <p className="text-meta text-muted" data-testid="llamacpp-progress">
-                      {p
-                        ? t("llamacpp.downloading", { done: fmtBytes(p.done), total: fmtBytes(p.total) }) +
-                          (minutes(p.seconds_left) != null ? " · " + t("llamacpp.minutes_left", { count: minutes(p.seconds_left) ?? 0 }) : "")
-                        : t("llamacpp.download_starting")}
+                      {setup.retry_in != null
+                        ? t("llamacpp.rate_limited", { seconds: setup.retry_in })
+                        : p?.verifying
+                          ? t("llamacpp.verifying")
+                          : p
+                            ? t("llamacpp.downloading", { done: fmtBytes(p.done), total: fmtBytes(p.total) }) +
+                              (minutes(p.seconds_left) != null ? " · " + t("llamacpp.minutes_left", { count: minutes(p.seconds_left) ?? 0 }) : "")
+                            : t("llamacpp.download_starting")}
                     </p>
                     <div className="h-1.5 rounded bg-paper overflow-hidden my-2">
                       <i className="block h-full bg-muted rounded" style={{ width: `${p && p.total ? Math.round((100 * p.done) / p.total) : 0}%` }} />
@@ -398,6 +414,7 @@ function SetupCard({
                   <Check done={false} now={phase === "checking"} text={t("llamacpp.check_answers")} />
                   <Check done={false} now={false} text={t("llamacpp.check_tools")} />
                 </ul>
+                {setup.note === "unverified" && <p className="text-meta text-faint mt-2" data-testid="llamacpp-note">{t("llamacpp.note_unverified")}</p>}
                 <div className="flex items-center gap-2.5 mt-2.5">
                   <button className={BTN} onClick={() => void act(cancelLlamaCpp)} data-testid="llamacpp-cancel">
                     {t("llamacpp.cancel")}
@@ -457,6 +474,7 @@ function ModelRow({
   fit,
   extra,
   action,
+  line,
 }: {
   id: string;
   picked: string;
@@ -467,6 +485,8 @@ function ModelRow({
   fit?: ModelFit;
   extra?: string;
   action?: ReactNode;
+  // A third line under the name: the licence, for a model that downloads.
+  line?: ReactNode;
 }) {
   const { t } = useTranslation();
   const on = picked === id && id !== "f:";
@@ -484,6 +504,7 @@ function ModelRow({
       <span className="min-w-0">
         <span className="block text-ui font-medium truncate">{name}</span>
         {sub && <span className="block text-label text-faint truncate">{sub}</span>}
+        {line && <span className="block truncate">{line}</span>}
       </span>
       <span className="text-meta text-muted text-right">{action ?? (size ? fmtBytes(size) : "")}</span>
       <span className={"text-meta text-right min-w-[72px] " + (fit === "runs_well" ? "text-ok" : "text-warnInk")}>

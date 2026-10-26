@@ -2834,6 +2834,7 @@
     "none_fit": "推荐的模型都超出这台 Mac 的内存。",
     "from_ollama": "来自 Ollama · 无需下载",
     "downloaded": "已下载",
+    "license": "许可证：{{name}}",
     "choose_file": "选择 GGUF 文件…",
     "choose_file_sub": "你自己下载的模型文件",
     "change": "更改",
@@ -2846,6 +2847,9 @@
     "start": "启动",
     "download_starting": "正在开始下载…",
     "downloading": "正在下载 · {{done}} / {{total}}",
+    "verifying": "正在校验下载…",
+    "rate_limited": "Hugging Face 正在限制下载，{{seconds}} 秒后重试",
+    "note_unverified": "无法连接 Hugging Face API，未校验此次下载的校验和。",
     "minutes_left_one": "约剩 {{count}} 分钟",
     "minutes_left_other": "约剩 {{count}} 分钟",
     "check_download": "下载模型",
@@ -2865,8 +2869,7 @@
     "own_server": "已经自己运行 llama-server？",
     "connect_instead": "改为连接到它",
     "setup_here": "改为在这台 Mac 上设置 llama.cpp"
-  }
-,
+  },
   "customization": {
     "title": "自定义",
     "lead": "选择 OpenWorker 各工具背后使用的服务。所做选择对本机的新会话生效。",

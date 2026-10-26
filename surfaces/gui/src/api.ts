@@ -2743,15 +2743,23 @@ export interface LlamaCppSetup {
     size: number | null;
     fit: ModelFit;
     downloaded: boolean;
+    // The model's licence, named and linked before Download (from its Hugging Face card).
+    license: string | null;
+    license_url: string | null;
   }[];
   ollama: { name: string; path: string; size: number; fit: ModelFit }[];
   ollama_pull: { name: string; size: number | null; fit: ModelFit; command: string }[];
   phase: LlamaCppPhase;
   lines: string[];
-  progress: { done: number; total: number; seconds_left: number | null } | null;
+  // `verifying`: the file is down and its sha256 is being checked against Hugging Face's.
+  progress: { done: number; total: number; seconds_left: number | null; verifying?: boolean } | null;
   model: { name: string; detail: string | null; alias: string; download?: boolean; context?: number; file?: string } | null;
   error: string | null;
   check: { answers: boolean; tools: boolean } | null;
+  // "unverified": the Hugging Face API was unreachable, so the download's checksum was not checked.
+  note: "unverified" | null;
+  // Seconds until the next try while Hugging Face rate-limits the download.
+  retry_in: number | null;
   address: string | null;
   autostart: boolean;
   last_choice: LlamaCppChoice | null;
