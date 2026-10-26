@@ -498,7 +498,7 @@ def test_matrix_answers_capabilities_for_reseller_ids():
         "fireworks:accounts/fireworks/models/kimi-k2p6",
         "openrouter:z-ai/glm-5.2",
         "openrouter:meta-llama/llama-4-maverick",
-        "nebius:Qwen/Qwen3.5-397B-A17B",
+        "nebius:zai-org/GLM-5.2",
     ):
         caps = capabilities_for(mid)
         assert caps.tools and caps.parallel_tool_calls and caps.streaming

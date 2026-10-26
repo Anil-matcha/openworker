@@ -381,12 +381,13 @@ MATRIX: dict[str, ModelEntry] = {
     "vertex:openweight/qwen/qwen3-coder-480b-a35b-instruct-maas": ModelEntry(
         "Qwen3 Coder · Vertex AI", _AGENTIC, 256_000
     ),
-    # Nebius Token Factory (ids verified against /v1/models + a live tool-call round-trip
-    # on 2026-07-26; it keeps each lab's own namespace, like Together).
-    "nebius:zai-org/GLM-5.2": ModelEntry("GLM-5.2 · via Nebius"),
-    "nebius:deepseek-ai/DeepSeek-V4-Pro": ModelEntry("DeepSeek V4 Pro · via Nebius"),
-    "nebius:moonshotai/Kimi-K2.6": ModelEntry("Kimi K2.6 · via Nebius"),
-    "nebius:Qwen/Qwen3.5-397B-A17B": ModelEntry("Qwen3.5 397B · via Nebius"),
+    # Nebius Token Factory keeps each lab's own namespace, like Together. Ids and windows
+    # from its public catalogue (tokenfactory.nebius.com/api/public/models_info, read
+    # 2026-10-25: `max_model_len` 1,048,576 for both; function_calling listed).
+    "nebius:zai-org/GLM-5.2": ModelEntry("GLM-5.2 · via Nebius", _AGENTIC, 1_048_576),
+    "nebius:deepseek-ai/DeepSeek-V4-Pro": ModelEntry(
+        "DeepSeek V4 Pro · via Nebius", _AGENTIC, 1_048_576
+    ),
 }
 
 

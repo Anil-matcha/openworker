@@ -735,7 +735,6 @@ DESCRIPTORS: list[ProviderDescriptor] = [
         base_url="https://api.tokenfactory.nebius.com/v1",
         recommended_model="zai-org/GLM-5.2",
         env_key="NEBIUS_API_KEY",
-        endpoint_help="Prefilled with Nebius Token Factory's endpoint (the former AI Studio host, https://api.studio.nebius.com/v1, still resolves).",
     ),
     ProviderDescriptor(
         name="ollama",
