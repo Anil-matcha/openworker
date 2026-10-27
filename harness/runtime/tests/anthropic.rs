@@ -206,3 +206,83 @@ async fn actual_http_sse_headers_and_terminal_completion() {
     assert!(matches!(rx.recv().await, Some(Progress::Complete(_))));
     task.await.unwrap();
 }
+
+// Anthropic can close an incomplete JSON/thinking block before sending the
+// message-level max_tokens reason. Never execute it, but preserve that reason
+// so the runtime can take its bounded continuation path.
+#[test]
+fn truncated_blocks_preserve_message_stop_reason() {
+    for block in ["tool_use", "thinking"] {
+        for reason in ["max_tokens", "model_context_window_exceeded"] {
+            let mut d = Decoder::default();
+            d.event(&start()).unwrap();
+            let initial = if block == "tool_use" {
+                json!({"type":"tool_use","id":"partial","name":"write_file","input":{}})
+            } else {
+                json!({"type":"thinking","thinking":""})
+            };
+            d.event(&json!({"type":"content_block_start","index":0,"content_block":initial}))
+                .unwrap();
+            let delta = if block == "tool_use" {
+                json!({"type":"input_json_delta","partial_json":"{\"content\":\"unfinished"})
+            } else {
+                json!({"type":"thinking_delta","thinking":"synthetic reasoning"})
+            };
+            d.event(&json!({"type":"content_block_delta","index":0,"delta":delta}))
+                .unwrap();
+            d.event(&json!({"type":"content_block_stop","index":0}))
+                .expect("block validation must wait for the message outcome");
+            let err = d.event(&json!({"type":"message_delta","delta":{"stop_reason":reason},"usage":{"output_tokens":8192}})).unwrap_err();
+            assert_eq!(err.kind, Failure::Truncated);
+            assert!(
+                d.finish().is_err(),
+                "no partial block may become a completion"
+            );
+        }
+    }
+}
+
+#[test]
+fn successful_stop_still_rejects_invalid_tool_json_and_unsigned_thinking() {
+    for initial in [
+        json!({"type":"tool_use","id":"partial","name":"write_file","input":{}}),
+        json!({"type":"thinking","thinking":"synthetic reasoning"}),
+    ] {
+        let is_tool = initial["type"] == "tool_use";
+        let mut d = Decoder::default();
+        d.event(&start()).unwrap();
+        d.event(&json!({"type":"content_block_start","index":0,"content_block":initial}))
+            .unwrap();
+        if is_tool {
+            d.event(&json!({"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"{\"content\":\"unfinished"}})).unwrap();
+        }
+        d.event(&json!({"type":"content_block_stop","index":0}))
+            .unwrap();
+        let end = d.event(&json!({"type":"message_delta","delta":{"stop_reason":if is_tool {"tool_use"} else {"end_turn"}},"usage":{"output_tokens":10}}));
+        assert!(
+            end.is_err() || {
+                d.event(&json!({"type":"message_stop"})).unwrap();
+                matches!(d.finish(), Err(e) if e.kind == Failure::InvalidResponse)
+            }
+        );
+    }
+}
+
+#[test]
+fn real_anthropic_token_limit_can_omit_block_stop() {
+    // Structural reproduction of a live Claude Sonnet 5 response with a forced
+    // tool and max_tokens=64. The provider ended with incomplete tool JSON and
+    // message_delta(max_tokens), without a content_block_stop event.
+    for reason in ["max_tokens", "model_context_window_exceeded"] {
+        let mut d = Decoder::default();
+        for e in [
+            start(),
+            json!({"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"partial","name":"write_file","input":{}}}),
+            json!({"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"{\"path\":\"sample.txt\",\"content\":\""}}),
+        ] {
+            d.event(&e).unwrap();
+        }
+        assert_eq!(d.event(&json!({"type":"message_delta","delta":{"stop_reason":reason},"usage":{"output_tokens":64}})).unwrap_err().kind, Failure::Truncated);
+        assert!(d.finish().is_err());
+    }
+}

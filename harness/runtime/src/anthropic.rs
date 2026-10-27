@@ -277,33 +277,31 @@ impl Decoder {
                 if block.closed {
                     return Err(invalid());
                 }
-                if block.value["type"] == "tool_use" && !block.input.is_empty() {
-                    block.value["input"] =
-                        serde_json::from_str(&block.input).map_err(|_| invalid())?;
-                    if !block.value["input"].is_object() {
-                        return Err(invalid());
-                    }
-                }
-                if block.value["type"] == "thinking"
-                    && block.value["signature"].as_str().is_none_or(str::is_empty)
-                {
-                    return Err(invalid());
-                }
+                // A closed block can still be incomplete when the message hit
+                // its token limit. Validate content only after the message-level
+                // outcome; otherwise truncation is misreported as invalid JSON
+                // (or a missing thinking signature) and cannot be recovered.
                 block.closed = true;
             }
             Some("message_delta") => {
-                if !self.started || self.reason.is_some() || self.blocks.values().any(|b| !b.closed)
-                {
+                if !self.started || self.reason.is_some() {
                     return Err(invalid());
                 }
                 self.usage.output_tokens =
                     e["usage"]["output_tokens"].as_u64().ok_or_else(invalid)?;
                 let reason = e["delta"]["stop_reason"].as_str().ok_or_else(invalid)?;
                 match reason {
-                    "end_turn" | "tool_use" => self.reason = Some(reason.into()),
+                    "end_turn" | "tool_use" => {
+                        if self.blocks.values().any(|b| !b.closed) {
+                            return Err(invalid());
+                        }
+                        self.reason = Some(reason.into());
+                    }
                     "refusal" => return Err(Error::new(Failure::SafetyBlocked)),
                     "max_tokens" | "model_context_window_exceeded" => {
-                        return Err(Error::new(Failure::Truncated))
+                        // A token-limited tool stream may omit content_block_stop.
+                        // Its unfinished blocks are discarded, never completed.
+                        return Err(Error::new(Failure::Truncated));
                     }
                     _ => return Err(invalid()),
                 }
@@ -329,7 +327,16 @@ impl Decoder {
         let mut output = vec![];
         let mut tool = false;
         for b in self.blocks.into_values() {
-            let v = b.value;
+            let mut v = b.value;
+            if v["type"] == "tool_use" && !b.input.is_empty() {
+                v["input"] = serde_json::from_str(&b.input).map_err(|_| invalid())?;
+                if !v["input"].is_object() {
+                    return Err(invalid());
+                }
+            }
+            if v["type"] == "thinking" && v["signature"].as_str().is_none_or(str::is_empty) {
+                return Err(invalid());
+            }
             match v["type"].as_str() {
                 Some("text") => output.push(json!({"type":"message","role":"assistant","content":[{"type":"output_text","text":v["text"]}]})),
                 Some("tool_use") => {
