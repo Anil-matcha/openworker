@@ -33,6 +33,7 @@ session still runs under its permission mode, and the user granted the scope exp
 
 from __future__ import annotations
 
+import os
 import re
 import shlex
 from dataclasses import dataclass
@@ -882,42 +883,6 @@ def _xxd_analyze(args: list[str]) -> list[str] | None:
     return operands if len(operands) <= 1 else None
 
 
-# actionlint takes Go-style flags (`-flag`, `--flag`, `-flag=value`). The flags that pick
-# an external linter program, or write a config file, are not on the list.
-_ACTIONLINT_BOOL = frozenset({"oneline", "color", "no-color", "verbose", "debug", "version"})
-_ACTIONLINT_VALUE = {"format": "text", "ignore": "text", "config-file": "path", "stdin-filename": "text"}
-
-
-def _actionlint_analyze(args: list[str]) -> list[str] | None:
-    targets: list[str] = []
-    i = 0
-    while i < len(args):
-        tok = args[i]
-        i += 1
-        if tok == "--":
-            targets.extend(args[i:])
-            break
-        if not tok.startswith("-") or tok == "-":
-            targets.append(tok)
-            continue
-        name, eq, value = tok.lstrip("-").partition("=")
-        if name in _ACTIONLINT_BOOL:
-            if eq and value not in ("true", "false"):
-                return None
-            continue
-        kind = _ACTIONLINT_VALUE.get(name)
-        if kind is None:
-            return None
-        if not eq:
-            if i >= len(args):
-                return None
-            value = args[i]
-            i += 1
-        if kind == "path":
-            targets.append(value)
-    return targets
-
-
 # -- git ---------------------------------------------------------------------------------------
 # Each read-only subcommand has its own flag list. Every positional operand is returned as
 # a read target: most are revisions or pathspecs inside the repository, which resolve
@@ -1076,19 +1041,26 @@ _GIT_REMOTE_GET_URL = _spec(long="push all", max_operands=1, common=False)
 _GIT_REMOTE_SHOW = _spec("n", check=lambda flags, _ops: _has(flags, "n"), common=False)  # -n: no network
 
 
-def _git_analyze(args: list[str]) -> list[str] | None:
-    # Global flags: `-C <dir>` and a few that only change how pathspecs and output read.
-    # `-c`, `--config-env`, `--git-dir`, `--work-tree` and `--exec-path` are not on the list.
-    targets: list[str] = []
+def _git_leading(args: list[str]) -> tuple[list[str], int]:
+    """The `-C DIR` operands among git's leading global flags, and where the subcommand
+    starts. The accepted global flags are `-C` and a few that only change how pathspecs
+    and output read; `-c`, `--config-env`, `--git-dir`, `--work-tree` and `--exec-path`
+    are not on the list."""
+    dirs: list[str] = []
     i = 0
     while i < len(args):
         if args[i] == "-C" and i + 1 < len(args):
-            targets.append(args[i + 1])
+            dirs.append(args[i + 1])
             i += 2
         elif args[i] in _GIT_GLOBAL_FLAGS:
             i += 1
         else:
             break
+    return dirs, i
+
+
+def _git_analyze(args: list[str]) -> list[str] | None:
+    targets, i = _git_leading(args)
     if i >= len(args):
         return None
     sub, rest = args[i], args[i + 1 :]
@@ -1144,8 +1116,6 @@ def _bash_stage(argv: list[str]) -> list[str] | None:
         return _find_analyze(args)
     if head == "xxd":
         return _xxd_analyze(args)
-    if head == "actionlint":
-        return _actionlint_analyze(args)
     spec = _SPECS.get(head)
     return _apply(spec, args) if spec is not None else None
 
@@ -1420,6 +1390,25 @@ def _fallback_targets(argv: list[str]) -> list[str]:
     if head == "find":
         return _find_targets(args)
     return _flag_values(args) + [t for t in args if not t.startswith("-") and not _NUMERIC.match(t)]
+
+
+def git_repo_dirs(command: str, shell: str = "bash") -> list[str]:
+    """The folder each git stage of an accepted command runs in: its `-C` operands joined,
+    or `.`. Empty when the command is not read-only. The engine checks the project's git
+    settings there before the grant covers the command (coworker/git_settings.py)."""
+    analyzed = _analyze(command, shell)
+    if analyzed is None or any(t is None for t in analyzed[1]):
+        return []
+    out: list[str] = []
+    for stage in analyzed[0]:
+        argv = stage if shell == "powershell" else _strip_env(stage)
+        if not argv:
+            continue
+        head = argv[0].lower() if shell == "powershell" else argv[0]
+        if head == "git":
+            dirs, _ = _git_leading(argv[1:])
+            out.append(os.path.join(*dirs) if dirs else ".")
+    return out
 
 
 def read_targets(command: str, shell: str = "bash") -> list[str]:

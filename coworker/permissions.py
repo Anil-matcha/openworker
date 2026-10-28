@@ -720,8 +720,11 @@ class PermissionEngine:
         """The read-only session grant's check (OPE-130, OPE-232): the command only reads,
         as this platform's shell runs it, and every path it reads is inside the folders.
         Paths are judged from the shell's real current folder when the engine knows it,
-        and wildcards are expanded with every match checked. Fails closed."""
-        from .readonly import is_readonly_command, read_targets
+        and wildcards are expanded with every match checked. A git command is covered only
+        when the project's own git settings are inert (coworker/git_settings.py), since
+        git obeys settings stored inside the project. Fails closed."""
+        from .git_settings import project_git_settings_inert
+        from .readonly import git_repo_dirs, is_readonly_command, read_targets
 
         try:
             if not is_readonly_command(command, shell=self.shell_kind):
@@ -743,6 +746,11 @@ class PermissionEngine:
                         if not self._under_root(str(Path(match).resolve())):
                             return False
                 if not self._under_root(str(full.resolve())):
+                    return False
+            for repo in git_repo_dirs(command, shell=self.shell_kind):
+                path = Path(os.path.expanduser(repo))
+                full = path if path.is_absolute() else base / path
+                if not project_git_settings_inert(full, lambda p: self._under_root(str(p))):
                     return False
             return True
         except Exception:  # noqa: BLE001 - a check that cannot finish never allows

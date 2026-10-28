@@ -117,6 +117,7 @@ REJECT = [
     "uname -x", "basename --zzz x", "readlink --zzz x", "which --zzz git",
     "echo -x hi", "printf -v name x", "true x", "env", "printenv", "env -i ls", "env -u X ls", "env X=1",
     "command ls", "command -p ls", "id -A",
+    "actionlint", "actionlint -oneline .github/workflows/ci.yml",  # may start other linters
     # git
     "git log --output=x", "git log --ext-diff", "git log --textconv", "git log --show-signature",
     "git log --format=%G?", "git log --pretty=format:%GS", "git log -L 1,2:x.c", "git log -Ox",
