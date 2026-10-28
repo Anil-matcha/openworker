@@ -255,3 +255,22 @@ def test_a_new_batch_trusts_the_shell_folder_again(tmp_path):
     engine.permissions.shell_cwd = engine.current_shell_cwd
     _run(engine, "look around")
     assert approvals == []
+
+
+# -- the card's button ------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "command, shell, expected",
+    [
+        ("grep foo notes.txt", "bash", True),
+        ("grep foo notes.txt", "powershell", False),  # not a PowerShell command the grant covers
+        ("Select-String foo notes.txt", "powershell", True),
+        ("Select-String foo notes.txt", "bash", False),
+        ("", "bash", False),
+    ],
+)
+def test_the_card_offers_the_grant_only_for_commands_it_covers(command, shell, expected):
+    from coworker.engine import _readonly_ok
+
+    assert _readonly_ok({"command": command}, shell) is expected

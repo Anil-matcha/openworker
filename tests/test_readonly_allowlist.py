@@ -56,7 +56,7 @@ ACCEPT = [
     # small utilities
     "pwd", "whoami", "id -u", "date", "date -u +%Y", "date -d @0 +%s", "uname -a",
     "basename a/b.c .c", "dirname a/b.c", "realpath x", "readlink -f x", "which -a git",
-    "echo hello", "echo -n hi", "printf 'a: '", "true", "false", "env",
+    "echo hello", "echo -n hi", "printf 'a: '", "true", "false",
     "command -v semgrep", "command -V git",
     # git
     "git status", "git status --short", "git status -sb", "git status --porcelain",
@@ -80,8 +80,7 @@ ACCEPT = [
     "git branch --contains abc", "git branch --list 'feat*'", "git branch -r --merged",
     "git tag", "git tag -l", "git tag -l 'v1*'", "git tag -n5 -l",
     "git stash list", "git stash show -p", "git remote", "git remote -v",
-    "git remote get-url origin", "git config --get user.name", "git config --list",
-    "git config -l", "git config get user.name", "git reflog", "git reflog show -5",
+    "git remote get-url origin", "git reflog", "git reflog show -5",
     "git --no-pager log -1", "git -C /tmp/repo log -1", "git --version",
 ]
 
@@ -116,7 +115,7 @@ REJECT = [
     "df --sync", "md5sum -c sums", "sha256sum --check sums", "shasum -c sums",
     "pwd x", "whoami x", "date 0101", "date -s now", "date -f list", "date -r x",
     "uname -x", "basename --zzz x", "readlink --zzz x", "which --zzz git",
-    "echo -x hi", "printf -v name x", "true x", "env -i ls", "env -u X ls", "env X=1",
+    "echo -x hi", "printf -v name x", "true x", "env", "printenv", "env -i ls", "env -u X ls", "env X=1",
     "command ls", "command -p ls", "id -A",
     # git
     "git log --output=x", "git log --ext-diff", "git log --textconv", "git log --show-signature",
@@ -131,7 +130,9 @@ REJECT = [
     "git tag v1", "git tag -d v1", "git tag -a v1 -m x", "git tag -v v1",
     "git stash", "git stash pop", "git stash drop", "git remote add x y", "git remote show origin",
     "git remote set-url origin x", "git config user.name x", "git config --unset x",
-    "git config --edit", "git config --add a b", "git reflog expire --all", "git reflog delete x",
+    "git config --edit", "git config --add a b", "git config --list", "git config -l",
+    "git config --get user.name", "git config get user.name", "git config --get http.extraheader",
+    "git reflog expire --all", "git reflog delete x",
     "git -c core.pager=x log", "git --git-dir=x log", "git --work-tree=x status",
     "git --exec-path=x status", "git --help", "git fetch", "git checkout x", "git commit -m x",
     "git status --zzz", "git rev-parse --resolve-git-dir x",
@@ -159,7 +160,7 @@ def test_any_other_flag_gets_a_card(command):
         ("strings @options.txt", False),  # an `@file` operand is read as more options
         ("command -v ls", True),
         ("command ls", False),  # runs ls
-        ("env", True),
+        ("env", False),  # prints every environment variable, secrets included
         ("env ls", False),  # runs ls
         ("printf '%s\\n' a b", True),
     ],
@@ -393,7 +394,6 @@ def test_a_hash_inside_a_word_is_part_of_the_word():
         ("git grep -f /x/pats", "/x/pats"),
         ("git ls-files -X /x/l", "/x/l"),
         ("git ls-files --exclude-from=/x/l", "/x/l"),
-        ("git config --file /x/conf --list", "/x/conf"),
         ("git diff --no-index /x/a b", "/x/a"),  # git diff reads plain files, too
         ("git -C /x log", "/x"),
     ],
@@ -426,6 +426,10 @@ PS_ACCEPT = [
     "cat README.md | sort", "cat README.md | Sort-Object -Unique", "ls | Select-Object -First 5",
     "echo hello", "Get-ChildItem -Recurse -ErrorAction SilentlyContinue",
     "git status", "git log --oneline -5", "git diff --stat",
+    # a recursive listing may feed cmdlets that only see names and sizes
+    "Get-ChildItem -Recurse | Select-Object -First 20", "gci -Recurse -File | Measure-Object",
+    "ls -Recurse | Sort-Object Length -Descending | Select-Object -First 5",
+    "Get-ChildItem src | Get-Content", "ls *.md | Select-String TODO",
 ]
 
 
@@ -443,7 +447,12 @@ PS_REJECT = [
     "grep foo x", "head -n 5 x", "tail x", "wc -l x", "sed -n 1p x", "find . -name x",
     "cat env:USERPROFILE", "Get-Content -Path Env:PATH", "ls HKLM:/Software", "cat Variable:x",
     "Get-ChildItem Registry::HKEY_LOCAL_MACHINE", "Get-ChildItem -Path Cert:/",
-    "git log --output=x", "git branch new",
+    "git log --output=x", "git branch new", "git config --list",
+    # a recursive listing feeding a cmdlet that reads the files it lists
+    "Get-ChildItem -Recurse | Select-String secret", "gci -Recurse | Get-Content",
+    "ls -r *.txt | sls password", "Get-ChildItem -Depth 3 | Get-Content",
+    "gci -Recurse -File | Select-Object -First 5 | Get-Content",
+    "Get-ChildItem -s | Get-FileHash",
 ]
 
 

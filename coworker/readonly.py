@@ -663,7 +663,6 @@ _SPECS: dict[str, _Spec] = {
     ),
     "true": _spec(max_operands=0, common=False),
     "false": _spec(max_operands=0, common=False),
-    "env": _spec("0", long="null", max_operands=0),  # bare `env` prints; operands run things
     "command": _spec("vVp", operands="none", check=_command_check, common=False),
     "column": _spec("tx", "c:num s:text o:text"),
     "diff": _spec(
@@ -925,6 +924,7 @@ def _actionlint_analyze(args: list[str]) -> list[str] | None:
 # inside the folders, but `git diff` also compares plain files named on the command line.
 # Pretty-format placeholders that verify signatures (`%G…`) run an external program, so a
 # format containing them rejects; so do the flags that run diff or textconv drivers.
+# `git config` is not on the list: settings can hold credentials, so reading them asks.
 
 _GIT_GLOBAL_FLAGS = frozenset({
     "--no-pager", "-P", "--no-optional-locks", "--literal-pathspecs", "--glob-pathspecs",
@@ -971,17 +971,6 @@ _GIT_REV = _spec(
 
 def _git_list_check(flags: Flags, operands: list[str]) -> bool:
     return not operands or _has(flags, "l", "list")  # operands without --list create
-
-
-def _git_config_check(flags: Flags, operands: list[str]) -> bool:
-    modes = [n for n, _, _ in flags if n in ("get", "get-all", "get-regexp", "get-urlmatch", "list", "l")]
-    if not modes:
-        if operands[:1] == ["list"]:
-            return len(operands) == 1
-        return operands[:1] == ["get"] and 2 <= len(operands) <= 3
-    if len(modes) != 1:
-        return False
-    return len(operands) == 0 if modes[0] in ("list", "l") else 1 <= len(operands) <= 2
 
 
 _GIT_SPECS: dict[str, _Spec] = {
@@ -1080,15 +1069,6 @@ _GIT_SPECS: dict[str, _Spec] = {
         "points-at:commit sort:text format:text",
         lopt="color column",
         check=_git_list_check,
-        common=False,
-    ),
-    "config": _spec(
-        "lz", "f:path",
-        long="get get-all get-regexp get-urlmatch list show-origin show-scope name-only null "
-        "global system local worktree includes no-includes bool int bool-or-int path "
-        "expiry-date all regexp",
-        lvals="file:path blob:text type:text default:text url:text",
-        check=_git_config_check,
         common=False,
     ),
 }
@@ -1265,6 +1245,32 @@ def _ps_value_ok(kind: Optional[str], value: str) -> bool:
     return True
 
 
+# A recursive listing may follow a directory junction out of the folders. Later stages
+# that only see names and sizes are fine; a stage that reads the listed files asks.
+_PS_NAME_ONLY = frozenset({"select-object", "sort-object", "measure-object", "write-output"})
+
+
+def _ps_recursive_listing(argv: list[str]) -> bool:
+    head = argv[0].lower()
+    if _PS_ALIASES.get(head, head) != "get-childitem":
+        return False
+    aliases = _PS_SPECS["get-childitem"].aliases
+    for tok in argv[1:]:
+        if tok.startswith("-") and len(tok) > 1:
+            name = tok[1:].partition(":")[0].lower()
+            if aliases.get(name, name) in ("recurse", "depth"):
+                return True
+    return False
+
+
+def _powershell_pipeline_ok(stages: list[list[str]]) -> bool:
+    for i, stage in enumerate(stages):
+        if _ps_recursive_listing(stage):
+            later = (s[0].lower() for s in stages[i + 1 :])
+            return all(_PS_ALIASES.get(h, h) in _PS_NAME_ONLY for h in later)
+    return True
+
+
 def _powershell_stage(argv: list[str]) -> list[str] | None:
     head, args = argv[0].lower(), argv[1:]
     if head == "git":
@@ -1358,6 +1364,8 @@ def _analyze(command: str, shell: str) -> tuple[list[list[str]], list[list[str] 
     if shell == "powershell":
         if any(_ENV_ASSIGN.match(s[0]) for s in stages):
             return None  # not an assignment in PowerShell: it would be a command name
+        if not _powershell_pipeline_ok(stages):
+            return stages, [None] * len(stages)
         return stages, [_powershell_stage(s) for s in stages]
     return stages, [_bash_stage(s) for s in stages]
 

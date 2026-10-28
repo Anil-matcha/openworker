@@ -90,13 +90,13 @@ class ApprovalOutcome(str, Enum):
     SUPERSEDED = "superseded"
 
 
-def _readonly_ok(arguments: dict) -> bool:
+def _readonly_ok(arguments: dict, shell: Optional[str] = "bash") -> bool:
     command = str((arguments or {}).get("command", "") or "")
     if not command:
         return False
     from .readonly import is_readonly_command
 
-    return is_readonly_command(command)
+    return is_readonly_command(command, shell=shell or "bash")
 
 
 @dataclass
@@ -1842,7 +1842,7 @@ class TurnEngine:
                     ),
                     # True when this shell command classifies as read-only — the card
                     # offers "Allow read-only commands for this session" only then.
-                    "readonly_ok": _readonly_ok(tool_call.arguments),
+                    "readonly_ok": _readonly_ok(tool_call.arguments, self.permissions.shell_kind),
                     # OPE-136 finding 4: where an MCP call actually goes, stamped at
                     # registration (mcp/tools.py) from the server def — so the card's
                     # scope chip can say "leaves this computer → host" instead of the

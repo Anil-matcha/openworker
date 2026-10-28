@@ -24,7 +24,7 @@ ACCEPT = [
     "git -C /tmp/repo log -1",
     "git branch --show-current",
     "git stash list",
-    "git config --get user.name",
+    "git rev-parse HEAD",
     "git remote -v",
     "jq '.results | length' /tmp/report.json",
     "find . -name '*.py'",
