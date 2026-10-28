@@ -135,7 +135,7 @@ def test_classifier_rejects(cmd):
 
 
 def test_engine_grant_gates_on_classifier(tmp_path):
-    eng = PermissionEngine(workspace_root=tmp_path, mode=Mode.INTERACTIVE)
+    eng = PermissionEngine(workspace_root=tmp_path, mode=Mode.INTERACTIVE, shell_kind="bash")
 
     class Meta:
         category = "shell"
